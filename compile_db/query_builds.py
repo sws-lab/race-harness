@@ -7,7 +7,7 @@ from compilation_database import CompilationDatabase
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--db', type=str, required=True, help='Path to SQLite3 database')
+    parser.add_argument('--db', type=str, required=True, help='Linux kernel compilation database path')
     args = parser.parse_args(sys.argv[1:])
 
     result = dict()

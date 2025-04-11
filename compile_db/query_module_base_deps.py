@@ -6,8 +6,8 @@ from compilation_database import CompilationDatabase, BuildTargetType
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--db', type=str, required=True, help='Path to SQLite3 database')
-    parser.add_argument('--build-id', type=str, required=True, help='Build identifier')
+    parser.add_argument('--db', type=str, required=True, help='Linux kernel compilation database path')
+    parser.add_argument('--build-id', type=str, required=True, help='Linux kernel build identifier')
     args = parser.parse_args(sys.argv[1:])
 
     result = dict()

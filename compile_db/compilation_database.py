@@ -88,6 +88,17 @@ class CompilationDatabase:
                 path=pathlib.Path(row[1]),
                 timestamp=datetime.datetime.fromtimestamp(row[2])
             )
+    
+    def kernel_build(self, build_id: str) -> Optional[KernelBuild]:
+        cursor = self._db.execute('''
+            SELECT Path, Timestamp FROM KernelBuilds WHERE ID = ?
+        ''', [build_id])
+        row = cursor.fetchone()
+        return KernelBuild(
+            identifier=build_id,
+            path=pathlib.Path(row[0]),
+            timestamp=datetime.datetime.fromtimestamp(row[1])
+        ) if row is not None else None
 
     def all_build_targets(self, build_id: str) -> Iterable[BuildTarget]:
         cursor = self._db.execute('''
@@ -123,18 +134,34 @@ class CompilationDatabase:
         cursor = self._db.execute('''
             SELECT Type, CmdFile, Command FROM Targets WHERE BuildID = ? AND Target = ?
         ''', [build_id, target])
-        if cursor.rowcount == 0:
-            return None
-        else:
-            row = cursor.fetchone()
-            return BuildTarget(
-                build_id=build_id,
-                cmd_filepath=row[1],
-                type=row[0],
-                target=target,
-                command=row[2],
-                sources=list(self.target_dependencies(build_id, target))
-            )
+        row = cursor.fetchone()
+        return BuildTarget(
+            build_id=build_id,
+            cmd_filepath=row[1],
+            type=BuildTargetType(row[0]),
+            target=target,
+            command=row[2],
+            sources=list(self.target_dependencies(build_id, target))
+        ) if row is not None else None
+    
+    def find_target_for(self, build_id: str, source: str) -> Optional[BuildTarget]:
+        cursor = self._db.execute('''
+            SELECT Targets.Target, Type, CmdFile, Command FROM Targets
+            INNER JOIN TargetDependencies ON
+                Targets.BuildID = TargetDependencies.BuildID AND
+                Targets.Target = TargetDependencies.Target AND
+                TargetDependencies.Source = ?
+            WHERE Targets.BuildID = ?
+        ''', [source, build_id])
+        row = cursor.fetchone()
+        return BuildTarget(
+            build_id=build_id,
+            cmd_filepath=row[2],
+            type=BuildTargetType(row[1]),
+            target=row[0],
+            command=row[3],
+            sources=list(self.target_dependencies(build_id, row[0]))
+        ) if row is not None else None
 
     def target_dependencies(self, build_id: str, target: str) -> Iterable[str]:
         cursor = self._db.execute('''
