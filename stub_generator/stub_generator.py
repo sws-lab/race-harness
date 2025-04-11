@@ -8,7 +8,7 @@ import re
 import shlex
 import dataclasses
 import functools
-from typing import Collection, List
+from typing import Collection, List, Callable, Optional
 import clang.cindex as cindex
 from compile_db.compilation_database import CompilationDatabase, BuildTargetType
 from undefined_scanner import UndefinedReferenceScanner, UndefinedReferenceScannerProfile
@@ -18,6 +18,7 @@ class StubGeneratorError(Exception): pass
 @dataclasses.dataclass
 class StubGeneratorProfile:
     scanner_profile: UndefinedReferenceScannerProfile
+    compiler_command_line_regex: str
     remove_include_path_prefixes: Collection[str]
     remove_includes: Collection[str]
 
@@ -25,6 +26,7 @@ class StubGeneratorProfile:
     def linux_kernel() -> 'StubGeneratorProfile':
         return StubGeneratorProfile(
             scanner_profile=UndefinedReferenceScannerProfile.linux_kernel(),
+            compiler_command_line_regex='^\/\/\s*CLANG\s+COMMAND\s+LINE\s*:(.*)$',
             remove_include_path_prefixes=[
                 'include',
                 'arch/*/include'
@@ -36,8 +38,6 @@ class StubGeneratorProfile:
         )
 
 class StubGenerator:
-    LOCAL_FILE_CMD_LINE_REGEXP = re.compile('^\/\/\s*CLANG\s+COMMAND\s+LINE\s*:(.*)$')
-
     def __init__(self, db: CompilationDatabase, build_id: str, profile: StubGeneratorProfile):
         self._db = db
         self._build = db.kernel_build(build_id)
@@ -67,7 +67,7 @@ class StubGenerator:
         if target is None or target.type != BuildTargetType.CompiledObject:
             raise StubGeneratorError(f'Unable to find appropriate kernel build target for {source_file}')
         if self._compiler_command_line_sample is None:
-            self._compiler_command_line_sample = target.tool_args
+            self._compiler_command_line_sample = target.tool_args.copy()
         workdir = os.getcwd()
         try:
             os.chdir(self._build.path)
@@ -75,19 +75,23 @@ class StubGenerator:
         finally:
             os.chdir(workdir)
 
+    @functools.cached_property
+    def _compiler_command_line_regex(self) -> re.Pattern:
+        return re.compile(self._profile.compiler_command_line_regex)
+
     def _scan_local_source_file(self, local_path: pathlib.Path):
         local_path = local_path.absolute()
         cmdline = None
         with open(local_path, 'r') as local_file:
             for line in local_file:
-                match = StubGenerator.LOCAL_FILE_CMD_LINE_REGEXP.match(line)
+                match = self._compiler_command_line_regex.match(line)
                 if match:
                     cmdline = shlex.split(match[1])
         if cmdline is None:
             raise StubGeneratorError(f'Unable to find compiler command line in {local_path}')
 
         if self._compiler_command_line_sample is None:
-            self._compiler_command_line_sample = cmdline
+            self._compiler_command_line_sample = cmdline.copy()
 
         workdir = os.getcwd()
         try:
@@ -100,7 +104,7 @@ class StubGenerator:
     def _removed_include_paths(self) -> Collection[pathlib.Path]:
         return set(map(lambda x: pathlib.Path(x), self._profile.remove_includes))
 
-    def _process_include_path(self, include_filepath: str):
+    def _process_include_path(self, include_filepath: str) -> pathlib.Path:
         def resolve_prefixes():
             include_path = (self._build.path / include_filepath)
             for prefix in self._profile.remove_include_path_prefixes:
@@ -130,11 +134,44 @@ class StubGenerator:
             for arg in cmdline
             if not arg.endswith('.c')
         ]
-        
+    
+    def _undefined_variables(self, blacklist: Optional[Callable[[cindex.Cursor], bool]]):
+        for node in self._scanner.undefined_variables():
+            if blacklist is None or not blacklist(node):
+                yield node
+    
+    def _undefined_functions(self, blacklist: Optional[Callable[[cindex.Cursor], bool]]):
+        for node in self._scanner.undefined_functions():
+            if blacklist is None or not blacklist(node):
+                yield node
 
-    def generate_stubs(self, blacklist) -> str:
-        stubs = io.StringIO()
+    def _has_undefined(self, blacklist: Optional[Callable[[cindex.Cursor], bool]]) -> bool:
+        for _ in self._undefined_variables(blacklist):
+            return True
+        for _ in self._undefined_functions(blacklist):
+            return True
+        return False
+    
+    def _generate_node_stub(self, stubs: io.StringIO, node: cindex.Cursor):
+        location_file = pathlib.Path(str(node.location.file))
+        display_location_file = location_file
+        if not location_file.is_absolute():
+            location_file = (self._build.path / location_file)
+            if location_file.exists():
+                display_location_file = location_file.relative_to(self._build.path)
+            else:
+                location_file = str(node.location.file)
+                display_location_file = location_file
+        stubs.write(f'// {node.spelling} [{display_location_file} line {node.location.line} column {node.location.column}]\n')
 
+        begin_offset = node.extent.start.offset
+        end_offset = node.extent.end.offset
+        with open(location_file, 'r') as file:
+            file.seek(begin_offset)
+            stubs.write(file.read(end_offset - begin_offset))
+        stubs.write(';\n\n')
+
+    def _generate_stubs_header(self, stubs: io.StringIO):
         stubs.write('''// This is a stub skeleton for Linux kernel module verification.
 // The skeleton contains variable and function declarations external to the module.
 // Please fill-in appropriate function code and variable values to obtain complete definitions
@@ -154,54 +191,28 @@ class StubGenerator:
             stubs.write('// !!! UNABLE TO DETERMINE COMPILER COMMAND LINE !!!\n')
             stubs.write('// !!! PLEASE FILL IN APPROPRIATE COMMAND LINE BELOW !!!\n')
             stubs.write('// CLANG COMMAND LINE: \n')
-        
-        has_undefined = False
-        for node in self._scanner.undefined_variables():
-            if blacklist is None or not blacklist(node):
-                has_undefined = True
-                break
-        if not has_undefined:
-            for node in self._scanner.undefined_functions():
-                if blacklist is None or not blacklist(node):
-                    has_undefined = True
-                    break
 
-        if has_undefined:
-            has_includes = False
-            for include in self._scanner.includes():
-                include_path = self._process_include_path(include)
-                if include_path is not None:
-                    stubs.write(f'#include "{include_path}"\n')
-                    has_includes = True
-            if has_includes:
-                stubs.write('\n')
+    def _generate_stubs_includes(self, stubs: io.StringIO):
+        has_includes = False
+        for include in self._scanner.includes():
+            include_path = self._process_include_path(include)
+            if include_path is not None:
+                stubs.write(f'#include "{include_path}"\n')
+                has_includes = True
+        if has_includes:
+            stubs.write('\n')
 
-        def write_node(node: cindex.Cursor):
-            location_file = pathlib.Path(str(node.location.file))
-            display_location_file = location_file
-            if not location_file.is_absolute():
-                location_file = (self._build.path / location_file)
-                if location_file.exists():
-                    display_location_file = location_file.relative_to(self._build.path)
-                else:
-                    location_file = str(node.location.file)
-                    display_location_file = location_file
-            stubs.write(f'// {node.spelling} [{display_location_file} line {node.location.line} column {node.location.column}]\n')
+    def generate_stubs(self, blacklist: Optional[Callable[[cindex.Cursor], bool]]) -> str:
+        stubs = io.StringIO()
 
-            begin_offset = node.extent.start.offset
-            end_offset = node.extent.end.offset
-            with open(location_file, 'r') as file:
-                file.seek(begin_offset)
-                stubs.write(file.read(end_offset - begin_offset))
+        self._generate_stubs_header(stubs)
+        if self._has_undefined(blacklist):
+            self._generate_stubs_includes(stubs)
+            for node in self._undefined_variables(blacklist):
+                self._generate_node_stub(stubs, node)
+            for node in self._undefined_functions(blacklist):
+                self._generate_node_stub(stubs, node)
 
-            stubs.write(';\n\n')
-
-        for node in self._scanner.undefined_variables():
-            if blacklist is None or not blacklist(node):
-                write_node(node)
-        for node in self._scanner.undefined_functions():
-            if blacklist is None or not blacklist(node):
-                write_node(node)
         return stubs.getvalue()
 
 if __name__ == '__main__':
@@ -212,16 +223,18 @@ if __name__ == '__main__':
     parser.add_argument('input', nargs='+', help='List of kernel objects and external stub files')
     args = parser.parse_args(sys.argv[1:])
 
-    blacklist_regexps = list()
     if args.blacklist:
-        for entry in args.blacklist:
-            blacklist_regexps.append(re.compile(entry))
+        blacklist_regexps = [
+            re.compile(entry)
+            for entry in args.blacklist
+        ]
+    else:
+        blacklist_regexps = list()
 
-    def blacklist_callback(node):
-        for entry in blacklist_regexps:
-            if entry.match(node.spelling):
-                return True
-        return False
+    def blacklist_callback(node: cindex.Cursor):
+        return any(
+            entry.match(node.spelling) for entry in blacklist_regexps
+        )
 
     with CompilationDatabase(db_filepath=args.db) as db:
         stub_generator = StubGenerator(db, args.build_id, StubGeneratorProfile.linux_kernel())

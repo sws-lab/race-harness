@@ -27,12 +27,13 @@ class UndefinedReferenceScanner:
         self._defined_variable_usrs = set()
         self._entity_index = dict()
         self._includes = set()
+        self._visited = set()
 
     def load(self, *args, **kwargs):
         unit = self._index.parse(*args, **kwargs)
         if not unit:
             raise UndefinedReferenceScannerError('Failed to parse input')
-        self._traverse_node(unit.cursor)
+        self._traverse_node(unit.cursor, False)
 
         for include in unit.get_includes():
             if include.depth == 1:
@@ -43,18 +44,18 @@ class UndefinedReferenceScanner:
     
     def _undefined_variables(self) -> Collection[str]:
         return self._used_variable_usrs.difference(self._defined_variable_usrs)
+    
+    def _resolve_usrs(self, usrs: Iterable[str]) -> Iterable[cindex.Cursor]:
+        return sorted((
+            self._entity_index[usr]
+            for usr in usrs
+        ), key=lambda node: node.spelling)
 
     def undefined_functions(self) -> Iterable[cindex.Cursor]:
-        return sorted((
-            self._entity_index[usr]
-            for usr in self._undefined_functions()
-        ), key=lambda node: node.spelling)
+        return self._resolve_usrs(self._undefined_functions())
     
     def undefined_variables(self) -> Iterable[cindex.Cursor]:
-        return sorted((
-            self._entity_index[usr]
-            for usr in self._undefined_variables()
-        ), key=lambda node: node.spelling)
+        return self._resolve_usrs(self._undefined_variables())
     
     def includes(self) -> Iterable[str]:
         return sorted(self._includes)
@@ -69,62 +70,70 @@ class UndefinedReferenceScanner:
             
         return False
     
-    def _traverse_node(self, node: cindex.Cursor, recursive: bool = False):
-        def traverse(node: cindex.Cursor, recursive: bool):
-            for child in node.get_children():
-                self._traverse_node(child, recursive)
-
+    def _traverse_node_children(self, node: cindex.Cursor, recursive: bool):
+        for child in node.get_children():
+            self._traverse_node(child, recursive)
+    
+    def _traverse_node(self, node: cindex.Cursor, recursive: bool):
         self._match_definitions_and_uses(node)
+        node_usr = node.get_usr()
+        if node_usr and node.is_definition():
+            if node_usr in self._visited:
+                return
+            self._visited.add(node_usr)
 
         if node.kind == cindex.CursorKind.TRANSLATION_UNIT:
-            traverse(node, recursive)
+            self._traverse_node_children(node, recursive)
         elif (node.kind == cindex.CursorKind.FUNCTION_DECL or node.kind == cindex.CursorKind.VAR_DECL) and \
             node.is_definition() and \
             self._is_external_decl(node):
-            traverse(node, True)        
+            self._traverse_node_children(node, True)        
         elif node.kind == cindex.CursorKind.CALL_EXPR and \
             node.referenced is not None:
-            traverse(node.referenced, True)
-            traverse(node, True)
+            self._traverse_node(node.referenced, True)
+            self._traverse_node_children(node, True)
         elif node.kind == cindex.CursorKind.DECL_REF_EXPR and \
             node.referenced is not None:
-            traverse(node.referenced, True)
-            traverse(node, True)
+            self._traverse_node(node.referenced, True)
+            self._traverse_node_children(node, True)
         elif recursive:
-            traverse(node, True)
+            self._traverse_node_children(node, True)
+
+    def _update_entity_index(self, node: cindex.Cursor):
+        usr = node.get_usr()
+        if usr not in self._entity_index:
+            self._entity_index[usr] = node
+
+    def _found_function_declaration(self, declaration: cindex.Cursor):
+        declaration = declaration.canonical
+        decl_usr = declaration.get_usr()
+        self._used_function_usrs.add(decl_usr)
+        self._update_entity_index(declaration)
+
+    def _found_variable_declaration(self, declaration: cindex.Cursor):
+        declaration = declaration.canonical
+        decl_usr = declaration.get_usr()
+        self._used_variable_usrs.add(decl_usr)
+        self._update_entity_index(declaration)
         
     def _match_definitions_and_uses(self, node: cindex.Cursor):
-        def found_func_decl(declaration: cindex.Cursor):
-            declaration = declaration.canonical
-            decl_usr = declaration.get_usr()
-            self._used_function_usrs.add(decl_usr)
-            if decl_usr not in self._entity_index:
-                self._entity_index[decl_usr] = declaration
-
-        def found_variable_decl(declaration: cindex.Cursor):
-            declaration = declaration.canonical
-            decl_usr = declaration.get_usr()
-            self._used_variable_usrs.add(decl_usr)
-            if decl_usr not in self._entity_index:
-                self._entity_index[decl_usr] = declaration
-
         if node.kind == cindex.CursorKind.CALL_EXPR and \
             node.referenced is not None and \
             node.referenced.kind == cindex.CursorKind.FUNCTION_DECL:
-            found_func_decl(node.referenced)
+            self._found_function_declaration(node.referenced)
         elif node.kind == cindex.CursorKind.DECL_REF_EXPR and \
             node.referenced is not None:
             if node.referenced.kind == cindex.CursorKind.FUNCTION_DECL:
-                found_func_decl(node.referenced)
+                self._found_function_declaration(node.referenced)
             elif node.referenced.kind == cindex.CursorKind.VAR_DECL:
-                found_variable_decl(node.referenced)
+                self._found_variable_declaration(node.referenced)
         elif node.kind == cindex.CursorKind.FUNCTION_DECL:
+            canonical_node = node.canonical
             if node.is_definition():
-                self._defined_function_usrs.add(node.canonical.get_usr())
-            if node.canonical.get_usr() not in self._entity_index:
-                self._entity_index[node.canonical.get_usr()] = node.canonical
+                self._defined_function_usrs.add(canonical_node.get_usr())
+            self._update_entity_index(canonical_node)
         elif node.kind == cindex.CursorKind.VAR_DECL:
+            canonical_node = node.canonical
             if node.is_definition() or node.linkage != cindex.LinkageKind.EXTERNAL:
-                self._defined_variable_usrs.add(node.canonical.get_usr())
-            if node.canonical.get_usr() not in self._entity_index:
-                self._entity_index[node.canonical.get_usr()] = node.canonical
+                self._defined_variable_usrs.add(canonical_node.get_usr())
+            self._update_entity_index(canonical_node)
