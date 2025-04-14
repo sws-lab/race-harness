@@ -2,7 +2,7 @@ import dataclasses
 from typing import Iterable, Container, Collection
 import clang.cindex as cindex
 
-class UndefinedReferenceScannerError(Exception): pass
+class UndefinedReferenceScannerError(BaseException): pass
 
 @dataclasses.dataclass
 class UndefinedReferenceScannerProfile:

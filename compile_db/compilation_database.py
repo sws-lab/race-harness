@@ -77,6 +77,10 @@ class CompilationDatabase:
                 FOREIGN KEY (BuildID, Target) REFERENCES Targets (BuildID, Target)
             )
         ''')
+
+    @property
+    def db_filepath(self) -> str:
+        return self._db_filepath
     
     def all_kernel_builds(self) -> Iterable[KernelBuild]:
         cursor = self._db.execute('''
@@ -88,6 +92,19 @@ class CompilationDatabase:
                 path=pathlib.Path(row[1]),
                 timestamp=datetime.datetime.fromtimestamp(row[2])
             )
+
+    def latest_kernel_build(self) -> Optional[KernelBuild]:
+        cursor = self._db.execute('''
+            SELECT ID, Path, Timestamp FROM KernelBuilds
+            ORDER BY Timestamp DESC
+            LIMIT 1
+        ''')
+        row = cursor.fetchone()
+        return KernelBuild(
+            identifier=row[0],
+            path=pathlib.Path(row[1]),
+            timestamp=datetime.datetime.fromtimestamp(row[2])
+        ) if row else None
     
     def kernel_build(self, build_id: str) -> Optional[KernelBuild]:
         cursor = self._db.execute('''

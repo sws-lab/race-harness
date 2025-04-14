@@ -13,7 +13,7 @@ import clang.cindex as cindex
 from compile_db.compilation_database import CompilationDatabase, BuildTargetType
 from undefined_scanner import UndefinedReferenceScanner, UndefinedReferenceScannerProfile
 
-class StubGeneratorError(Exception): pass
+class StubGeneratorError(BaseException): pass
 
 @dataclasses.dataclass
 class StubGeneratorProfile:

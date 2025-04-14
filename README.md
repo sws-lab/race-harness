@@ -37,8 +37,9 @@ cd ../..
 
 # Explore available modules
 compile_db/extract_compilation_database.py --build-dir kernel/linux-6.14.1 --db kernel/linux-6.14.1.db
-compile_db/query_builds.py --db kernel/linux-6.14.1.db
-compile_db/query_module_base_deps.py  --db kernel/linux-6.14.1.db --build-id 27fc3ea7-1240-4223-9977-56c56a22c9f0 # UUID as printed by the previous command
+compile_db/query_compilation_database.py  --db kernel/linux-6.14.1.db --query-builds
+compile_db/query_compilation_database.py  --db kernel/linux-6.14.1.db --build-id 27fc3ea7-1240-4223-9977-56c56a22c9f0 --query-base-deps # UUID as printed by the previous command
+compile_db/query_compilation_database.py  --db kernel/linux-6.14.1.db --build-id 27fc3ea7-1240-4223-9977-56c56a22c9f0 --target drivers/char/ttyprintk.ko --query-all-deps # UUID as printed by the previous command
 
 # Determine chosen module dependencies and prepare stubs
 ./stub_generator/stub_generator.py --db kernel/linux-6.14.1.db --build-id 27fc3ea7-1240-4223-9977-56c56a22c9f0 drivers/char/ttyprintk.ko --blacklist ".*builtin.*" --blacklist ".*compiletime.*" --blacklist ".*fortify.*" > stubs.c # Generate stub skeleton
