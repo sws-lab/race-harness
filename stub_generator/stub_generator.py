@@ -8,6 +8,7 @@ import re
 import shlex
 import dataclasses
 import functools
+import logging
 from typing import Collection, List, Callable, Optional
 import clang.cindex as cindex
 from compile_db.compilation_database import CompilationDatabase, BuildTargetType
@@ -217,10 +218,12 @@ class StubGenerator:
         return stubs.getvalue()
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--db', type=str, required=True, help='Linux kernel compilation database path')
-    parser.add_argument('--build-id', type=str, required=True, help='Linux kernel build identifier')
+    prog_basename = os.path.basename(__file__)
+    parser = argparse.ArgumentParser(prog=prog_basename, description='Stub generator for Linux kernel module external dependencies')
+    parser.add_argument('--db', type=str, required=True, help='Kernel compilation database path')
+    parser.add_argument('--build-id', type=str, required=False, help='Kernel build identifier')
     parser.add_argument('--blacklist', action='append', help='Regular expressions for blacklisted symbols')
+    parser.add_argument('--quiet', action='store_true', default=False, help='Suppress all logging')
     parser.add_argument('input', nargs='+', help='List of kernel objects and external stub files')
     args = parser.parse_args(sys.argv[1:])
 
@@ -236,9 +239,26 @@ if __name__ == '__main__':
         return any(
             entry.match(node.spelling) for entry in blacklist_regexps
         )
+    
+    logger = logging.Logger(prog_basename)
+    if not args.quiet:
+        logger.addHandler(logging.StreamHandler(sys.stderr))
 
     with CompilationDatabase(db_filepath=args.db) as db:
-        stub_generator = StubGenerator(db, args.build_id, StubGeneratorProfile.linux_kernel())
+        logger.info('Using kernel build database %s', db.db_filepath)
+        if args.build_id is not None:
+            build = db.kernel_build(args.build_id)
+            if build is None:
+                logger.error('Unable to find requested build %s in kernel build database %s', args.build_id, db.db_filepath)
+                sys.exit(-1)
+        else:
+            build = db.latest_kernel_build()
+            if build is None:
+                logger.error('Kernel build database %s does not contain any builds', db.db_filepath)
+                sys.exit(-1)
+        logger.info('Using kernel build %s', build.identifier)
+            
+        stub_generator = StubGenerator(db, build.identifier, StubGeneratorProfile.linux_kernel())
         for input in args.input:
             stub_generator.load(input)
         print(stub_generator.generate_stubs(blacklist_callback))
