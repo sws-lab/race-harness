@@ -130,9 +130,10 @@ class StubGenerator:
             del cmdline[output_index]
         
         return [
-            arg
+            '-I.',
+            *(arg
             for arg in cmdline
-            if not arg.endswith('.c')
+            if not arg.endswith('.c') and arg != '-c')
         ]
     
     def _undefined_variables(self, blacklist: Optional[Callable[[cindex.Cursor], bool]]):

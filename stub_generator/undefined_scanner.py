@@ -26,8 +26,8 @@ class UndefinedReferenceScanner:
         self._defined_function_usrs = set()
         self._defined_variable_usrs = set()
         self._entity_index = dict()
-        self._includes = set()
-        self._visited = set()
+        self._includes = list()
+        self._traversed = set()
 
     def load(self, *args, **kwargs):
         unit = self._index.parse(*args, **kwargs)
@@ -36,8 +36,9 @@ class UndefinedReferenceScanner:
         self._traverse_node(unit.cursor, False)
 
         for include in unit.get_includes():
-            if include.depth == 1:
-                self._includes.add(str(include.include))
+            include_filepath = str(include.include)
+            if include.depth == 1 and include_filepath not in self._includes:
+                self._includes.append(str(include.include))
     
     def _undefined_functions(self) -> Collection[str]:
         return self._used_function_usrs.difference(self._defined_function_usrs)
@@ -58,7 +59,7 @@ class UndefinedReferenceScanner:
         return self._resolve_usrs(self._undefined_variables())
     
     def includes(self) -> Iterable[str]:
-        return sorted(self._includes)
+        return self._includes
     
     def _is_external_decl(self, node: cindex.Cursor):
         if node.linkage == cindex.LinkageKind.EXTERNAL:
@@ -71,16 +72,17 @@ class UndefinedReferenceScanner:
         return False
     
     def _traverse_node_children(self, node: cindex.Cursor, recursive: bool):
+        node_usr = node.get_usr()
+        if node.is_definition() and node_usr:
+            if node_usr in self._traversed:
+                return
+            self._traversed.add(node_usr)
+
         for child in node.get_children():
             self._traverse_node(child, recursive)
     
     def _traverse_node(self, node: cindex.Cursor, recursive: bool):
         self._match_definitions_and_uses(node)
-        node_usr = node.get_usr()
-        if node_usr and node.is_definition():
-            if node_usr in self._visited:
-                return
-            self._visited.add(node_usr)
 
         if node.kind == cindex.CursorKind.TRANSLATION_UNIT:
             self._traverse_node_children(node, recursive)
