@@ -21,10 +21,11 @@ to a subsystem they wish to analyze, whereas other transitive dependencies, stub
 can be done as described previously. Automatic discovery of subsystem code in a fine-grained manner requires some additional insights.
 
 ## Dependencies
-Install LLVM, Clang, lld, python3-clang (tested from verion 19 from https://apt.llvm.org/).
+Install LLVM, Clang, lld, python3-clang (tested from verion 19 from https://apt.llvm.org/). Patched version of Goblint and Cil shall
+be used from https://github.com/sws-lab/linux-verification-goblint  and https://github.com/sws-lab/linux-verification-cil respectively.
 
 ## Usage
-At the moment, compilation database generation, module boundary inference and stub skeleton generator has been implemented. Example usage:
+Example usage:
 ```bash
 mkdir kernel
 cd kernel
@@ -45,4 +46,7 @@ compile_db/query_compilation_database.py  --db kernel/linux-6.14.1.db --build-id
 ./stub_generator/stub_generator.py --db kernel/linux-6.14.1.db --build-id 27fc3ea7-1240-4223-9977-56c56a22c9f0 drivers/char/ttyprintk.ko --blacklist ".*builtin.*" --blacklist ".*compiletime.*" --blacklist ".*fortify.*" > stubs.c # Generate stub skeleton
 # Fill-in stubs.c
 ./stub_generator/stub_generator.py --db kernel/linux-6.14.1.db --build-id 27fc3ea7-1240-4223-9977-56c56a22c9f0 drivers/char/ttyprintk.ko stubs.c --blacklist ".*builtin.*" --blacklist ".*compiletime.*" --blacklist ".*fortify.*" # See what is missing
+
+# Run Goblint on the chosen module + stubs
+./goblint_driver/goblint_driver.py --db kernel/linux-6.14.1.db --goblint ~/goblint/analyzer/goblint  drivers/char/ttyprintk.ko ~/ttyprintk-stubs.c
 ```
