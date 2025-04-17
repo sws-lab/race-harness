@@ -27,6 +27,7 @@ be used from https://github.com/sws-lab/linux-verification-goblint  and https://
 ## Usage
 Example usage:
 ```bash
+# Build the kernel with Clang. Use allmodconfig to maximize module segregation.
 mkdir kernel
 cd kernel
 wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.14.1.tar.xz
@@ -36,11 +37,13 @@ make allmodconfig LLVM=-19
 make all LLVM=-19 -j$(nproc)
 cd ../..
 
-# Explore available modules
+# Prepare compilation database
 compile_db/extract_compilation_database.py --build-dir kernel/linux-6.14.1 --db kernel/linux-6.14.1.db
+
+# Explore available modules
 compile_db/query_compilation_database.py  --db kernel/linux-6.14.1.db --query-builds
-compile_db/query_compilation_database.py  --db kernel/linux-6.14.1.db --build-id 27fc3ea7-1240-4223-9977-56c56a22c9f0 --query-base-deps # UUID as printed by the previous command
-compile_db/query_compilation_database.py  --db kernel/linux-6.14.1.db --build-id 27fc3ea7-1240-4223-9977-56c56a22c9f0 --target drivers/char/ttyprintk.ko --query-all-deps # UUID as printed by the previous command
+compile_db/query_compilation_database.py  --db kernel/linux-6.14.1.db --build-id 27fc3ea7-1240-4223-9977-56c56a22c9f0 --query-base-deps # UUID as printed by the previous command; can be omitted to use the latest added build
+compile_db/query_compilation_database.py  --db kernel/linux-6.14.1.db --build-id 27fc3ea7-1240-4223-9977-56c56a22c9f0 --target drivers/char/ttyprintk.ko --query-all-deps # See above comment
 
 # Determine chosen module dependencies and prepare stubs
 ./stub_generator/stub_generator.py --db kernel/linux-6.14.1.db --build-id 27fc3ea7-1240-4223-9977-56c56a22c9f0 drivers/char/ttyprintk.ko --blacklist ".*builtin.*" --blacklist ".*compiletime.*" --blacklist ".*fortify.*" > stubs.c # Generate stub skeleton
@@ -49,4 +52,6 @@ compile_db/query_compilation_database.py  --db kernel/linux-6.14.1.db --build-id
 
 # Run Goblint on the chosen module + stubs
 ./goblint_driver/goblint_driver.py --db kernel/linux-6.14.1.db --goblint ~/goblint/analyzer/goblint  drivers/char/ttyprintk.ko ~/ttyprintk-stubs.c
+# Or some other module
+./goblint_driver/goblint_driver.py --db kernel/linux-6.14.1.db --goblint ~/goblint/analyzer/goblint  sound/usb/snd-usbmidi-lib.ko ~/snd-usbmidi-lib-stubs.c
 ```
