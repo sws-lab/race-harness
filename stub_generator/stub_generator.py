@@ -204,6 +204,16 @@ class StubGenerator:
         if has_includes:
             stubs.write('\n')
 
+    def _generate_stubs_footer(self, stubs: io.StringIO):
+        stubs.write('''
+int main(void) {
+    init_module();
+    // Fill in the code to meaningfully drive module execution
+    cleanup_module();
+    return 0;
+}
+''')
+
     def generate_stubs(self, blacklist: Optional[Callable[[cindex.Cursor], bool]]) -> str:
         stubs = io.StringIO()
 
@@ -214,6 +224,7 @@ class StubGenerator:
                 self._generate_node_stub(stubs, node)
             for node in self._undefined_functions(blacklist):
                 self._generate_node_stub(stubs, node)
+        self._generate_stubs_footer(stubs)
 
         return stubs.getvalue()
 
