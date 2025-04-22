@@ -11,18 +11,11 @@
 #include "linux/kconfig.h"
 #include "asm/orc_header.h"
 #include "linux/build-salt.h"
-#include "linux/console.h"
-#include "linux/device.h"
 #include "linux/elfnote-lto.h"
 #include "linux/export-internal.h"
 #include "linux/module.h"
-#include "linux/serial.h"
-#include "linux/tty.h"
 
 extern volatile int RANDOM;
-
-// tty_std_termios [include/linux/tty.h line 379 column 24]
-struct ktermios tty_std_termios = {0};
 
 // __raw_spin_lock_init [include/linux/spinlock.h line 101 column 15]
 extern void __raw_spin_lock_init(raw_spinlock_t *lock, const char *name,
@@ -69,14 +62,6 @@ extern ssize_t __real_strscpy(char *s, const char *x, size_t b) {
 	return RANDOM;
 }
 
-// __tty_alloc_driver [include/linux/tty_driver.h line 475 column 20]
-struct tty_driver *__tty_alloc_driver(unsigned int lines, struct module *owner,
-		unsigned long flags) {
-	static struct tty_driver drv = {0};
-	return &drv;
-}
-		
-
 // __write_overflow [include/linux/fortify-string.h line 60 column 6]
 void __write_overflow(void) {}
 
@@ -98,56 +83,4 @@ unsigned long __lockfunc _raw_spin_lock_irqsave(raw_spinlock_t *lock) {
 void __lockfunc
 _raw_spin_unlock_irqrestore(raw_spinlock_t *lock, unsigned long flags) {
 	spin_unlock(lock);
-}
-
-// init_module [include/linux/module.h line 76 column 12]
-extern int init_module(void) {
-	return RANDOM % 1;
-}
-
-// register_console [include/linux/console.h line 627 column 13]
-extern void register_console(struct console *c) {
-}
-
-// unregister_console [include/linux/console.h line 628 column 12]
-extern int unregister_console(struct console *c) {
-	return RANDOM % 1;
-}
-
-// tty_driver_kref_put [include/linux/tty_driver.h line 479 column 6]
-void tty_driver_kref_put(struct tty_driver *driver) {}
-
-// tty_port_close [include/linux/tty_port.h line 245 column 6]
-void tty_port_close(struct tty_port *port, struct tty_struct *tty,
-		struct file *filp) {}
-
-// tty_port_destroy [include/linux/tty_port.h line 161 column 6]
-void tty_port_destroy(struct tty_port *port) {}
-
-// tty_port_hangup [include/linux/tty_port.h line 237 column 6]
-void tty_port_hangup(struct tty_port *port) {}
-
-// tty_port_init [include/linux/tty_port.h line 140 column 6]
-void tty_port_init(struct tty_port *port) {}
-
-// tty_port_link_device [include/linux/tty_port.h line 141 column 6]
-void tty_port_link_device(struct tty_port *port, struct tty_driver *driver,
-		unsigned index) {}
-
-// tty_port_open [include/linux/tty_port.h line 249 column 5]
-int tty_port_open(struct tty_port *port, struct tty_struct *tty,
-		struct file *filp) {
-	return RANDOM % 1;
-}
-
-// tty_register_driver [include/linux/tty_driver.h line 575 column 5]
-int tty_register_driver(struct tty_driver *driver) {
-	return RANDOM % 1;
-}
-
-// tty_unregister_driver [include/linux/tty_driver.h line 576 column 6]
-void tty_unregister_driver(struct tty_driver *driver) {
-}
-
-extern void cleanup_module(void) {
 }
