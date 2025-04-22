@@ -66,6 +66,7 @@ class GoblintDriver:
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json') as goblint_conf:
             goblint_conf_content = json.dumps({
                 'kernel': True,
+                'kernel_use_main': True,
                 'pre': {
                     'kernel-root': str(build.path.absolute())
                 }
