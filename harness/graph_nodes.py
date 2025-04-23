@@ -91,9 +91,9 @@ class StateGraphResponseMessageDestination(StateGraphMessageDestination):
         return destination == in_response_to
     
 class StateGraphProductNode(StateGraphNode):
-    def __init__(self):
+    def __init__(self, subnodes: Optional[List[StateGraphNode]] = None):
         super().__init__(mnemonic='()')
-        self._subnodes = list()
+        self._subnodes = subnodes.copy() if subnodes else list()
         self._edges = None
 
     def add_subnode(self, subnode: StateGraphNode) -> 'StateGraphProductNode':
@@ -142,9 +142,23 @@ class StateGraphDerivedNode(StateGraphNode):
         self._base = base
         self._edges = list()
 
+    @property
+    def mnemonic_prefix(self) -> str:
+        return self._mnemonic_prefix
+
+    @property
+    def base(self) -> StateGraphNode:
+        return self._base
+
     def add_edge(self, match_base: Optional[StateGraphNode], trigger: Optional[StateGraphMessage], target: StateGraphNode, action: StateGraphAction) -> 'StateGraphDerivedNode':
         self._edges.append((match_base, StateGraphEdge(source=self, target=target, trigger=trigger, action=action)))
         return self
+    
+    def rebase(self, new_base: StateGraphNode) -> 'StateGraphDerivedNode':
+        node = StateGraphDerivedNode(mnemonic_prefix=self.mnemonic_prefix, base=new_base)
+        for match_base, other_edge in self._edges:
+            node.add_edge(match_base=match_base, trigger=other_edge.trigger, target=other_edge.target, action=other_edge.action)
+        return node
     
     @property
     def edges(self) -> Iterable[StateGraphEdge]:
@@ -152,10 +166,18 @@ class StateGraphDerivedNode(StateGraphNode):
             if match_base is None or self._base == match_base:
                 yield edge
         for edge in self._base.edges:
-            target_node = StateGraphDerivedNode(mnemonic_prefix=self._mnemonic_prefix, base=edge.target)
-            for match_base, other_edge in self._edges:
-                target_node.add_edge(match_base=match_base, trigger=other_edge.trigger, target=other_edge.target, action=other_edge.action)
+            target_node = self.rebase(edge.target)
             yield StateGraphEdge(source=self, target=target_node, trigger=edge.trigger, action=edge.action)
+
+class StateGraphPlaceholderNode(StateGraphNode):
+    def __init__(self):
+        super().__init__(mnemonic='?', is_placeholder=True)
+
+    def edges(self) -> Iterable[StateGraphEdge]:
+        yield from ()
+
+    def __eq__(self, value):
+        return isinstance(value, StateGraphPlaceholderNode)
 
 def product_message_mapping_from(senders: List['Process']):
     def construct_product_message(index: int, message: StateGraphProductMessage):

@@ -105,13 +105,18 @@ class StateGraphEdge:
         return hash(self.source) * 31 + hash(self.target) * 17 + hash(self.trigger)
 
 class StateGraphNode(abc.ABC):
-    def __init__(self, mnemonic: str):
+    def __init__(self, mnemonic: str, is_placeholder: bool = False):
         super().__init__()
         self._mnemonic = mnemonic
+        self._is_placeholder = is_placeholder
     
     @property
     def mnemonic(self) -> str:
         return self._mnemonic
+    
+    @property
+    def is_placeholder(self) -> bool:
+        return self._is_placeholder
 
     @property
     @abc.abstractmethod
@@ -130,6 +135,9 @@ class StateGraphNode(abc.ABC):
         if include_self:
             yield self
             visited.add(self)
+
+    def matches(self, value: 'StateGraphNode'):
+        return self.is_placeholder or value.is_placeholder or self == value
 
     def __str__(self):
         return self.mnemonic

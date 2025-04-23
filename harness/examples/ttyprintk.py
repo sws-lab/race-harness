@@ -1,6 +1,7 @@
 from harness.state_graph import StateGraphMessageEnvelope
 from harness.process_set import ProcessSet
 from harness.graph_nodes import StateGraphSimpleNode, StateGraphSimpleAction, StateGraphSimpleMessage, StateGraphProductNode, StateGraphDerivedNode, StateGraphResponseMessageDestination, product_message_mapping_from
+from harness.invariants import derive_invariant_for
 
 # Process set with parameterized number of clients
 def generate_process_set(num_of_clients: int) -> ProcessSet:
@@ -89,3 +90,7 @@ for state in reachable_states:
     print(state)
 
 print(len(reachable_states)) # 167963 valid states for 13 clients and a driver
+
+# Let's see what are driver process invariants for each client in connected state
+for client in tty_clients:
+    print(client, derive_invariant_for(client, tty_client_connected_state, tty_driver, reachable_states))
