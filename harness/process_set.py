@@ -37,30 +37,30 @@ class ProcessSetState:
         return self._state.get(process, None)
 
     def reachable_states(self, *, include_self: bool = False) -> Iterable['ProcessSetState']:
-        states = set()
+        visited = set()
         queue = [*self.next_states]
         if include_self:
-            states.add(self)
             yield self
+            visited.add(self)
         while len(queue) > 0:
             state = queue.pop()
-            if state not in states:
-                states.add(state)
+            if state not in visited:
                 yield state
+                visited.add(state)
                 queue.extend(state.next_states)
-        return states
 
     @property
     def next_states(self) -> Iterable['ProcessSetState']:
-        result = set()
+        visited = set()
         if self._postbox:
             entry = self._postbox[0]
             for state in self._next_triggered_states(entry, self._postbox[1:]):
-                result.add(state)
+                yield state
+                visited.add(state)
         else:
             for state in self._next_untriggered_states():
-                result.add(state)
-        return result
+                yield state
+                visited.add(state)
 
     def _next_untriggered_states(self) -> Iterable['ProcessSetState']:
         for process, state in self.process_states:

@@ -1,6 +1,5 @@
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 from harness.state_graph import StateGraphNode, StateGraphMessageParticipant, StateGraphMessage, StateGraphMessageDestination
-from harness.graph_nodes import StateGraphProductMessage
 
 class Process(StateGraphMessageParticipant, StateGraphMessageDestination):
     def __init__(self, mnemonic: str, entry_node: StateGraphNode):
@@ -41,21 +40,3 @@ class Process(StateGraphMessageParticipant, StateGraphMessageDestination):
     
     def __hash__(self) -> int:
         return hash(self.mnemonic)
-
-    @staticmethod
-    def product_message_mapping_from(senders: List['Process']):
-        def construct_product_message(index: int, message: StateGraphProductMessage):
-            submessages = list()
-            for i in range(len(senders)):
-                if index == i:
-                    submessages.append(message)
-                else:
-                    submessages.append(None)
-            return StateGraphProductMessage(submessages)
-        def mapping(source: StateGraphMessageParticipant, message: StateGraphMessage) -> Optional[StateGraphProductMessage]:
-            for index, sender in enumerate(senders):
-                if sender == source:
-                    return construct_product_message(index, message)
-            return None
-        return mapping
-

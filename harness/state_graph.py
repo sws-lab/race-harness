@@ -39,17 +39,9 @@ class StateGraphMessageDestination(abc.ABC):
     def mnemonic(self) -> str: pass
 
     def matches(self, destination: StateGraphMessageParticipant, in_response_to: Optional[StateGraphMessageParticipant]) -> bool:  pass
-    
-class StateGraphResponseMessageDestination(StateGraphMessageDestination):
-    def __init__(self):
-        super().__init__()
-    
-    @property
-    def mnemonic(self) -> str:
-        return '%RESPONSE%'
-    
-    def matches(self, destination: StateGraphMessageParticipant, in_response_to: Optional[StateGraphMessageParticipant]) -> bool:
-        return destination == in_response_to
+
+    def __str__(self):
+        return self.mnemonic
 
 @dataclasses.dataclass(frozen=True)
 class StateGraphMessageEnvelope:
@@ -125,18 +117,19 @@ class StateGraphNode(abc.ABC):
     @abc.abstractmethod
     def edges(self) -> Iterable[StateGraphEdge]: pass
 
-    def reachable_nodes(self, *, include_self: bool = False) -> Set['StateGraphNode']:
-        reachable = set()
+    def reachable_nodes(self, *, include_self: bool = False) -> Iterable['StateGraphNode']:
+        visited = set()
         pending = [*self.edges]
         while len(pending) > 0:
             edge = pending.pop()
-            if edge.target not in reachable:
-                reachable.add(edge.target)
+            if edge.target not in visited:
+                yield edge
+                visited.add(edge.target)
                 for edge in edge.target.edges:
                     pending.append(edge)
         if include_self:
-            reachable.add(self)
-        return reachable
+            yield self
+            visited.add(self)
 
     def __str__(self):
         return self.mnemonic

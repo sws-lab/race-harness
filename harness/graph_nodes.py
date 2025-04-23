@@ -1,5 +1,6 @@
 from typing import Optional, Iterable, List
-from harness.state_graph import StateGraphNode, StateGraphMessage, StateGraphAction, StateGraphEdge, StateGraphMessageEnvelope
+from harness.state_graph import StateGraphNode, StateGraphMessage, StateGraphAction, StateGraphEdge, StateGraphMessageEnvelope, StateGraphMessageDestination, StateGraphMessageParticipant
+from harness.process import Process
 
 class StateGraphSimpleNode(StateGraphNode):
     def __init__(self, mnemonic: str):
@@ -78,6 +79,17 @@ class StateGraphProductMessage(StateGraphMessage):
             res = res * 31 + hash(msg)
         return res
     
+class StateGraphResponseMessageDestination(StateGraphMessageDestination):
+    def __init__(self):
+        super().__init__()
+    
+    @property
+    def mnemonic(self) -> str:
+        return '%RESPONSE%'
+    
+    def matches(self, destination: StateGraphMessageParticipant, in_response_to: Optional[StateGraphMessageParticipant]) -> bool:
+        return destination == in_response_to
+    
 class StateGraphProductNode(StateGraphNode):
     def __init__(self):
         super().__init__(mnemonic='()')
@@ -103,7 +115,7 @@ class StateGraphProductNode(StateGraphNode):
     @property
     def edges(self) -> Iterable[StateGraphEdge]:
         if self._edges is None:
-            self._edges = set(self._compute_edges())
+            self._edges = list(self._compute_edges())
         return self._edges
     
     def _compute_edges(self):
@@ -144,3 +156,19 @@ class StateGraphDerivedNode(StateGraphNode):
             for match_base, other_edge in self._edges:
                 target_node.add_edge(match_base=match_base, trigger=other_edge.trigger, target=other_edge.target, action=other_edge.action)
             yield StateGraphEdge(source=self, target=target_node, trigger=edge.trigger, action=edge.action)
+
+def product_message_mapping_from(senders: List['Process']):
+    def construct_product_message(index: int, message: StateGraphProductMessage):
+        submessages = list()
+        for i in range(len(senders)):
+            if index == i:
+                submessages.append(message)
+            else:
+                submessages.append(None)
+        return StateGraphProductMessage(submessages)
+    def mapping(source: StateGraphMessageParticipant, message: StateGraphMessage) -> Optional[StateGraphProductMessage]:
+        for index, sender in enumerate(senders):
+            if sender == source:
+                return construct_product_message(index, message)
+        return None
+    return mapping
