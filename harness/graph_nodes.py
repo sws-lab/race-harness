@@ -25,8 +25,8 @@ class StateGraphSimpleAction(StateGraphAction):
     def message_envelopes(self) -> Iterable[StateGraphMessageEnvelope]:
         return self._envelopes
     
-    def add_envelope(self, envelope: StateGraphMessageEnvelope) -> 'StateGraphSimpleAction':
-        self._envelopes.append(envelope)
+    def add_envelope(self, destination: StateGraphMessageDestination, message: StateGraphMessage) -> 'StateGraphSimpleAction':
+        self._envelopes.append(StateGraphMessageEnvelope(destination=destination, message=message))
         return self
     
 class StateGraphSimpleMessage(StateGraphMessage):
@@ -89,6 +89,21 @@ class StateGraphResponseMessageDestination(StateGraphMessageDestination):
     
     def matches(self, destination: StateGraphMessageParticipant, in_response_to: Optional[StateGraphMessageParticipant]) -> bool:
         return destination == in_response_to
+    
+class StateGraphResponseGroupDestination(StateGraphMessageDestination):
+    def __init__(self, recipients: Iterable[StateGraphResponseMessageDestination]):
+        super().__init__()
+        self._recipients = list(recipients)
+    
+    @property
+    def mnemonic(self) -> str:
+        return '[{}]'.format(', '.join(
+            str(recipient)
+            for recipient in self._recipients
+        ))
+    
+    def matches(self, destination: StateGraphMessageParticipant, in_response_to: Optional[StateGraphMessageParticipant]) -> bool:
+        return any(recipient.matches(destination, in_response_to) for recipient in self._recipients)
     
 class StateGraphProductNode(StateGraphNode):
     def __init__(self, subnodes: Optional[List[StateGraphNode]] = None):

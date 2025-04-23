@@ -83,11 +83,15 @@ class ProcessSetState:
                 yield from self._next_states_from_edges(process, triggered_edges, postbox, entry)
 
     def _next_states_from_edges(self, process: Process, edges: Iterable[StateGraphEdge], postbox: Iterable[PostboxEntry], trigger_entry: Optional[PostboxEntry]) -> Iterable['ProcessSetState']:
-            def process_action_envelope(envelope: StateGraphMessageEnvelope) -> PostboxEntry:
+            def process_action_envelope(envelope: StateGraphMessageEnvelope) -> Iterable[PostboxEntry]:
+                has_recipients = False
+                in_response_to = trigger_entry.source if trigger_entry is not None else trigger_entry
                 for destination, _ in self.process_states:
-                    if envelope.destination.matches(destination=destination, in_response_to=trigger_entry.source if trigger_entry is not None else trigger_entry):
-                        return PostboxEntry(source=process, destination=destination, message=envelope.message)
-                raise HarnessError('Unable to find process matching the envelope')
+                    if envelope.destination.matches(destination=destination, in_response_to=in_response_to):
+                        has_recipients = True
+                        yield PostboxEntry(source=process, destination=destination, message=envelope.message)
+                if not has_recipients:
+                    raise HarnessError('Unable to find any process matching the envelope')
             for edge in edges:
                 new_state = {
                     other_process: edge.target if other_process == process else other_state
@@ -95,10 +99,10 @@ class ProcessSetState:
                 }
                 new_postbox = [
                     *postbox,
-                    *(
+                    *(envelope for envelope_list in (
                         process_action_envelope(envelope)
                         for envelope in edge.action.message_envelopes
-                    )
+                    ) for envelope in envelope_list)
                 ]
                 yield ProcessSetState(state=new_state, postbox=new_postbox)
 

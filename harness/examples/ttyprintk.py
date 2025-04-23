@@ -1,6 +1,6 @@
 from harness.state_graph import StateGraphMessageEnvelope
 from harness.process_set import ProcessSet
-from harness.graph_nodes import StateGraphSimpleNode, StateGraphSimpleAction, StateGraphSimpleMessage, StateGraphProductNode, StateGraphDerivedNode, StateGraphResponseMessageDestination, product_message_mapping_from
+from harness.graph_nodes import StateGraphSimpleNode, StateGraphSimpleAction, StateGraphSimpleMessage, StateGraphProductNode, StateGraphDerivedNode, StateGraphResponseMessageDestination, product_message_mapping_from, StateGraphResponseGroupDestination
 from harness.invariants import derive_invariant_for
 
 # Process set with parameterized number of clients
@@ -44,18 +44,16 @@ def generate_process_set(num_of_clients: int) -> ProcessSet:
 
     # Actions -- actions are used to represent harness C code "payload" attached to state machine transitions + virtual messages to be sent upon transition
     noop_action = StateGraphSimpleAction(mnemonic='noop')
-    tty_driver_load_action = StateGraphSimpleAction(mnemonic='tty_driver_load')
-    for client in tty_clients:
-        tty_driver_load_action.add_envelope(StateGraphMessageEnvelope(destination=client, message=tty_driver_loaded_msg))
-    tty_client_request_connection_action = StateGraphSimpleAction(mnemonic='tty_client_request_connection')
-    tty_client_request_connection_action.add_envelope(StateGraphMessageEnvelope(destination=tty_driver, message=tty_client_request_connection_msg))
-    tty_driver_grant_connection_action = StateGraphSimpleAction(mnemonic='tty_driver_grant_connection')
-    tty_driver_grant_connection_action.add_envelope(StateGraphMessageEnvelope(destination=StateGraphResponseMessageDestination(), message=tty_driver_grant_connection_msg))
-    tty_client_disconnect_action = StateGraphSimpleAction(mnemonic='tty_client_disconnect')
-    tty_client_disconnect_action.add_envelope(StateGraphMessageEnvelope(destination=tty_driver, message=tty_client_disconnect_msg))
-    tty_driver_unload_action = StateGraphSimpleAction(mnemonic='tty_driver_unload')
-    for client in tty_clients:
-        tty_driver_unload_action.add_envelope(StateGraphMessageEnvelope(destination=client, message=tty_driver_unloaded_msg))
+    tty_driver_load_action = StateGraphSimpleAction(mnemonic='tty_driver_load') \
+        .add_envelope(destination=StateGraphResponseGroupDestination(tty_clients), message=tty_driver_loaded_msg)
+    tty_client_request_connection_action = StateGraphSimpleAction(mnemonic='tty_client_request_connection') \
+        .add_envelope(destination=tty_driver, message=tty_client_request_connection_msg)
+    tty_driver_grant_connection_action = StateGraphSimpleAction(mnemonic='tty_driver_grant_connection') \
+        .add_envelope(destination=StateGraphResponseMessageDestination(), message=tty_driver_grant_connection_msg)
+    tty_client_disconnect_action = StateGraphSimpleAction(mnemonic='tty_client_disconnect') \
+        .add_envelope(destination=tty_driver, message=tty_client_disconnect_msg)
+    tty_driver_unload_action = StateGraphSimpleAction(mnemonic='tty_driver_unload') \
+        .add_envelope(destination=StateGraphResponseGroupDestination(tty_clients), message=tty_driver_unloaded_msg)
 
     # Now, the actual state machine for the client
     tty_client_nodriver_state.add_edge(trigger=None, target=tty_client_nodriver_state, action=noop_action)
