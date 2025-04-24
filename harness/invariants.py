@@ -6,8 +6,8 @@ from harness.graph_nodes import StateGraphDerivedNode, StateGraphProductNode, St
 
 def filter_process_set_states_for(process: Process, state: StateGraphNode, invariant_process: Process, trace: Iterable[ProcessSetState]) -> Iterable[ProcessSetState]:
     for psstate in trace:
-        if psstate.process_state(process) == state:
-            yield psstate.process_state(invariant_process)
+        if psstate.process_state(process).state == state:
+            yield psstate.process_state(invariant_process).state
 
 def find_invariant(state: StateGraphNode, other: StateGraphNode) -> Optional[StateGraphNode]:
     if state == other:
@@ -39,7 +39,7 @@ def find_invariant(state: StateGraphNode, other: StateGraphNode) -> Optional[Sta
         
     return StateGraphPlaceholderNode()
 
-def derive_invariant_for(process: Process, state: StateGraphNode, invariant_process: Process, trace: Iterable[ProcessSetState]):
+def derive_invariant_for(process: Process, state: StateGraphNode, invariant_process: Process, trace: Iterable[ProcessSetState]) -> Optional[StateGraphNode]:
     has_invariant = False
     invariant = None
     for state in filter_process_set_states_for(process, state, invariant_process, trace):
@@ -49,6 +49,6 @@ def derive_invariant_for(process: Process, state: StateGraphNode, invariant_proc
             continue
 
         invariant = find_invariant(state, invariant)
-        if invariant is None:
+        if invariant == StateGraphPlaceholderNode():
             break
     return invariant
