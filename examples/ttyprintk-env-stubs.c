@@ -30,7 +30,7 @@ struct tty_driver *__tty_alloc_driver(unsigned int lines, struct module *owner, 
   return &drv;
 }
 
-static struct tty_driver *registered_tty_driver = NULL;
+struct tty_driver *registered_tty_driver = NULL;
 int tty_register_driver(struct tty_driver *driver) {
   registered_tty_driver = driver;
   return 0;
@@ -63,54 +63,5 @@ void register_console(struct console *c) {
 
 int unregister_console(struct console *c) {
   registered_console = NULL;
-  return 0;
-}
-
-int main(void) {
-// Init module
-  init_module();
-  
-  // Randomly drive the tty
-#define MAX_OPEN_TTYS 32
-#define MAX_WRITE_BUF_LENGTH 256
-  struct tty_struct open_ttys[MAX_OPEN_TTYS];
-  struct file open_tty_files[MAX_OPEN_TTYS];
-  u8 write_buf[MAX_WRITE_BUF_LENGTH];
-  unsigned int open_ttys_top = 0;
-  for (; RANDOM % 4096 != 0;) {
-    switch (RANDOM % 3) {
-      case 0:
-        if (open_ttys_top < MAX_OPEN_TTYS) {
-          registered_tty_driver->ops->open(&open_ttys[open_ttys_top], &open_tty_files[open_ttys_top]);
-          open_ttys_top++;
-        }
-        break;
-    
-      case 1:
-        if (open_ttys_top > 0) {
-          open_ttys_top--;
-          registered_tty_driver->ops->hangup(&open_ttys[open_ttys_top]);
-          registered_tty_driver->ops->close(&open_ttys[open_ttys_top], &open_tty_files[open_ttys_top]);
-        }
-        break;
-
-      case 2:
-        if (open_ttys_top > 0) {
-          unsigned int tty = RANDOM % open_ttys_top;
-          unsigned int length = registered_tty_driver->ops->write_room(&open_ttys[tty]);
-          if (length > MAX_WRITE_BUF_LENGTH) {
-            length = MAX_WRITE_BUF_LENGTH;
-          }
-          for (unsigned int i = 0; i < length; i++) {
-            write_buf[i] = RANDOM;
-          }
-          registered_tty_driver->ops->write(&open_ttys[tty], write_buf, length);
-        }
-        break;
-    }
-  }
-
-  // Cleanup module
-  cleanup_module();
   return 0;
 }

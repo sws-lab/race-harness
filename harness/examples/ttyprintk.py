@@ -2,7 +2,7 @@ from harness.core import ProcessSet
 from harness.entities import StateGraphSimpleNode, StateGraphSimpleAction, StateGraphSimpleMessage, StateGraphProductNode, StateGraphDerivedNode, StateGraphResponseMessageDestination, StateGraphProductMessage, StateGraphResponseGroupDestination
 from harness.codegen.kernel_module import KernelModuleHarnessGenerator, KernelModuleHarnessProcessTemplate
 
-NUM_OF_CLIENTS = 2
+NUM_OF_CLIENTS = 1
 
 # Messages are quite simple. Driver might communicate to the clients that it has been loaded
 # (in reality there is no such communication, but corresponding invariant is simply upheld by the kernel).
@@ -79,20 +79,16 @@ tty_driver_loaded_state.add_edge(match_base=tty_driver_all_clients_inactive_subs
 
 # Obtain complete state space for the system and derive some invariants
 state_space = processes.state_space
-tty_client_invariants = [
-    *(
-        state_space.derive_invariant(process=client, state=tty_client_connected_state, invariant_process=tty_driver)
-        for client in tty_clients
-    ),
-    *(
-        state_space.derive_invariant(process=client, state=tty_client_wait_connection_state, invariant_process=tty_driver)
-        for client in tty_clients
-    ),
-    *(
-        state_space.derive_invariant(process=client, state=tty_client_disconnected_state, invariant_process=tty_driver)
-        for client in tty_clients
-    )
-]
+invariants = list()
+for state in tty_client_nodriver_state.all_nodes:
+    for client in tty_clients:
+        invariants.append(state_space.derive_invariant(process=client, state=state, invariant_process=tty_driver))
+        for other_client in tty_clients:
+            if client != other_client:
+                invariants.append(state_space.derive_invariant(process=client, state=state, invariant_process=other_client))
+for state in tty_driver_unloaded_state.all_nodes:
+    for client in tty_clients:
+        invariants.append(state_space.derive_invariant(process=tty_driver, state=state, invariant_process=client))
 
 # Now let's prepare templates for processes
 tty_driver_template = KernelModuleHarnessProcessTemplate(tty_driver.entry_node)
@@ -116,6 +112,32 @@ for client in tty_clients:
     codegen.set_process_template(client, tty_client_template, {
         'client_buffer': client.mnemonic
     })
-for invariant in tty_client_invariants:
+for invariant in invariants:
     codegen.add_invariant(invariant)
+
+print('''
+#include "linux/compiler_types.h"
+#include "linux/kconfig.h"
+#include "asm/orc_header.h"
+#include "linux/build-salt.h"
+#include "linux/console.h"
+#include "linux/device.h"
+#include "linux/elfnote-lto.h"
+#include "linux/export-internal.h"
+#include "linux/module.h"
+#include "linux/serial.h"
+#include "linux/tty.h"
+
+typedef long __harness_mutex;
+typedef long __harness_thread;
+void __harness_thread_create(__harness_thread *, void *, void *(*)(void *), void *);
+void __harness_thread_join(__harness_thread *, void *);
+void __harness_mutex_init(__harness_mutex *);
+void __harness_mutex_lock(__harness_mutex *);
+void __harness_mutex_unlock(__harness_mutex *);
+extern volatile long __harness_random;
+
+extern struct tty_driver *registered_tty_driver;
+      
+''')
 print(codegen.generate())

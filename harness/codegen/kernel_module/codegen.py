@@ -55,16 +55,16 @@ class KernelModuleHarnessGenerator:
         return out.getvalue()
     
     def _generate(self) -> IndentedLineGenerator:
-        for invariant in self._invariants:
-            yield f'static mutex harness_kernel_module_invariant_{invariant.process.mnemonic}_{invariant.state.mnemonic}_{invariant.invariant_process.mnemonic} = MUTEX_INIT;'
+        for index, _ in enumerate(self._invariants):
+            yield f'static __harness_mutex harness_kernel_module_invariant_{index};'
         if self._invariants:
             yield ''
 
         def get_invariants(process: Process, state: StateGraphNode) -> Iterable[str]:
-            for invariant in self._invariants:
+            for index, invariant in enumerate(self._invariants):
                 if (invariant.process == process and invariant.state == state) or \
                     invariant.invariant_process == process and state not in invariant:
-                    yield f'harness_kernel_module_invariant_{invariant.process.mnemonic}_{invariant.state.mnemonic}_{invariant.invariant_process.mnemonic}'
+                    yield f'harness_kernel_module_invariant_{index}'
 
         for process, (process_template, process_specialization) in self._processes.items():
             yield from process_template.generate(process, process_specialization, get_invariants)
@@ -72,8 +72,16 @@ class KernelModuleHarnessGenerator:
 
         yield 'int main(void) {'
         yield 1
-        for process in self._processes.keys():
-            yield f'{KernelModuleHarnessProcessTemplate.process_function_name(process)}(NULL);'
+        for index, _ in enumerate(self._processes.keys()):
+            yield f'__harness_thread process{index};'
+        for index, _ in enumerate(self._invariants):
+            yield f'__harness_mutex_init(&harness_kernel_module_invariant_{index});'
+        yield ''
+        for index, process in enumerate(self._processes.keys()):
+            yield f'__harness_thread_create(&process{index}, NULL, {KernelModuleHarnessProcessTemplate.process_function_name(process)}, NULL);'
+        yield ''
+        for index, _ in enumerate(self._processes.keys()):
+            yield f'__harness_thread_join(&process{index}, NULL);'
         yield ''
         yield 'return 0;'
         yield -1

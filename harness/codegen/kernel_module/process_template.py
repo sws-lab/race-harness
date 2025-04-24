@@ -25,7 +25,7 @@ class KernelModuleHarnessProcessTemplate:
         return self
     
     def _random(self, max: int) -> str:
-        return f'RANDOM() % {max}'
+        return f'__harness_random % {max}'
     
     @staticmethod
     def process_function_name(process: Process) -> str:
@@ -44,14 +44,16 @@ class KernelModuleHarnessProcessTemplate:
                     line = self._apply_specialization(line, specialization)
                     yield line
         yield f'unsigned long harness_kernel_module_process_state = {self._node_enumeration[self._entry_node]};'
-        yield 'switch (harness_kernel_module_process_state) {{'
+        yield 'for (;;) {'
+        yield 1
+        yield 'switch (harness_kernel_module_process_state) {'
         yield 1
         for node, node_state_index in self._node_enumeration.items():
             yield f'case {node_state_index}: /* {node.mnemonic} */'
             yield 1
             invariants = list(invariants_getter(process, node))
             for invariant in invariants:
-                yield f'mutex_lock(&{invariant})'
+                yield f'__harness_mutex_lock(&{invariant});'
             node_edges = list(node.edges)
             yield f'switch ({self._random(len(node_edges))}) {{'
             yield 1
@@ -74,10 +76,12 @@ class KernelModuleHarnessProcessTemplate:
                 yield IndentedLine(relative_indent=-1, line='')
             yield IndentedLine(relative_indent=-1, line='}')
             for invariant in reversed(invariants):
-                yield f'mutex_unlock(&{invariant})'
+                yield f'__harness_mutex_unlock(&{invariant});'
             yield 'break;'
             yield IndentedLine(relative_indent=-1, line='')
         yield IndentedLine(relative_indent=-1, line='}')
+        yield -1
+        yield '}'
         yield 'return NULL;'
         yield IndentedLine(relative_indent=-1, line='}')
 
