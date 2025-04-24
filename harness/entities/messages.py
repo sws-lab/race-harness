@@ -16,7 +16,7 @@ class StateGraphSimpleMessage(StateGraphMessage):
         return hash(self.mnemonic)
     
 class StateGraphProductMessage(StateGraphMessage):
-    def __init__(self, submessages: Iterable[Optional[StateGraphMessage]]):
+    def __init__(self, submessages: Iterable[StateGraphMessage]):
         super().__init__()
         self._submessages = list(submessages)
 
@@ -32,17 +32,18 @@ class StateGraphProductMessage(StateGraphMessage):
         ))
     
     @property
-    def submessages(self) -> List[StateGraphMessage]:
-        return self._submessages.copy()
+    def submessages(self) -> Iterable[StateGraphMessage]:
+        yield from self._submessages
     
     def __eq__(self, value):
         if not isinstance(value, StateGraphProductMessage):
             return False
-        if len(self._submessages) != len(value.submessages):
+        try:
+            for own_msg, other_msg in zip(self.submessages, value.submessages, strict=True):
+                if own_msg != other_msg:
+                    return False
+        except ValueError:
             return False
-        for own_msg, other_msg in zip(self.submessages, value.submessages):
-            if own_msg != other_msg:
-                return False
         return True
     
     def __hash__(self):
@@ -52,14 +53,14 @@ class StateGraphProductMessage(StateGraphMessage):
         return res
 
     @staticmethod
-    def product_message_mapping_from(senders: List['Process']):
+    def product_message_mapping_from(senders: List['Process'], empty_message: StateGraphMessage):
         def construct_product_message(index: int, message: StateGraphProductMessage):
             submessages = list()
             for i in range(len(senders)):
                 if index == i:
                     submessages.append(message)
                 else:
-                    submessages.append(None)
+                    submessages.append(empty_message)
             return StateGraphProductMessage(submessages)
         def mapping(source: StateGraphMessageParticipant, message: StateGraphMessage) -> Optional[StateGraphProductMessage]:
             for index, sender in enumerate(senders):

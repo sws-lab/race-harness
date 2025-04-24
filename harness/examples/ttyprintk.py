@@ -4,6 +4,17 @@ from harness.analysis import derive_invariant_for
 
 # Process set with parameterized number of clients
 def generate_process_set(num_of_clients: int) -> ProcessSet:
+    # Messages are quite simple. Driver might communicate to the clients that it has been loaded
+    # (in reality there is no such communication, but corresponding invariant is simply upheld by the kernel).
+    # Driver also communicates to the clients when it has been unloaded, and responds to client connection requests.
+    # Client might request connection and notify driver of disconnection (i.e. dropping kernel handle in reality).
+    empty_msg = StateGraphSimpleMessage(mnemonic='_')
+    tty_driver_loaded_msg = StateGraphSimpleMessage(mnemonic='tty_driver_loaded')
+    tty_client_request_connection_msg = StateGraphSimpleMessage(mnemonic='tty_client_request_connection')
+    tty_driver_grant_connection_msg = StateGraphSimpleMessage(mnemonic='tty_driver_grant_connection')
+    tty_client_disconnect_msg = StateGraphSimpleMessage(mnemonic='tty_client_disconnect')
+    tty_driver_unloaded_msg = StateGraphSimpleMessage(mnemonic='tty_driver_unloaded')
+
     # Client states are simple (here by "connection" I mean acquiring API handle for driver within the kernel, or something similar)
     tty_client_nodriver_state = StateGraphSimpleNode(mnemonic='tty_client_nodriver') # No driver loaded => client cannot be connected
     tty_client_disconnected_state = StateGraphSimpleNode(mnemonic='tty_client_disconnected') # There is a driver loaded, but client is not connected
@@ -18,7 +29,7 @@ def generate_process_set(num_of_clients: int) -> ProcessSet:
     # client.
     tty_driver_client_inactive_substate = StateGraphSimpleNode(mnemonic='tty_driver_client_inactive')
     tty_driver_client_active_substate = StateGraphSimpleNode(mnemonic='tty_driver_client_active')
-    tty_driver_all_clients_inactive_substate = StateGraphProductNode() # Product of all client states
+    tty_driver_all_clients_inactive_substate = StateGraphProductNode((), empty_msg) # Product of all client states
     for _ in range(num_of_clients):
         tty_driver_all_clients_inactive_substate.add_subnode(tty_driver_client_inactive_substate)
     tty_driver_loaded_state = StateGraphDerivedNode(mnemonic_prefix='tty_driver_loaded', base=tty_driver_all_clients_inactive_substate) # The actual "loaded" state for the driver
@@ -28,18 +39,8 @@ def generate_process_set(num_of_clients: int) -> ProcessSet:
     tty_clients = [processes.add_process(mnemonic=f'tty_client{i + 1}', entry_node=tty_client_nodriver_state) for i in range(num_of_clients)] # Initial state for a client -- no driver
     tty_driver = processes.add_process(mnemonic='tty_driver', entry_node=tty_driver_unloaded_state)
 
-    # Messages are also quite simple. Driver might communicate to the clients that it has been loaded
-    # (in reality there is no such communication, but corresponding invariant is simply upheld by the kernel).
-    # Driver also communicates to the clients when it has been unloaded, and responds to client connection requests.
-    # Client might request connection and notify driver of disconnection (i.e. dropping kernel handle in reality).
-    tty_driver_loaded_msg = StateGraphSimpleMessage(mnemonic='tty_driver_loaded')
-    tty_client_request_connection_msg = StateGraphSimpleMessage(mnemonic='tty_client_request_connection')
-    tty_driver_grant_connection_msg = StateGraphSimpleMessage(mnemonic='tty_driver_grant_connection')
-    tty_client_disconnect_msg = StateGraphSimpleMessage(mnemonic='tty_client_disconnect')
-    tty_driver_unloaded_msg = StateGraphSimpleMessage(mnemonic='tty_driver_unloaded')
-
     # Message maps -- this is only needed to map individual client connection/disconnection request to a single compound "loaded" state of the driver.
-    tty_driver.add_message_mapping(StateGraphProductMessage.product_message_mapping_from(tty_clients))
+    tty_driver.add_message_mapping(StateGraphProductMessage.product_message_mapping_from(tty_clients, empty_msg))
 
     # Actions -- actions are used to represent harness C code "payload" attached to state machine transitions + virtual messages to be sent upon transition
     noop_action = StateGraphSimpleAction(mnemonic='noop')

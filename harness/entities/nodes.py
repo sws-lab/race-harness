@@ -17,10 +17,11 @@ class StateGraphSimpleNode(StateGraphNode):
         return self._edges.values()
 
 class StateGraphProductNode(StateGraphNode):
-    def __init__(self, subnodes: Optional[List[StateGraphNode]] = None):
+    def __init__(self, subnodes: Iterable[StateGraphNode], empty_message: StateGraphMessage):
         super().__init__(mnemonic='()')
-        self._subnodes = subnodes.copy() if subnodes else list()
+        self._subnodes = list(subnodes)
         self._edges = None
+        self._empty_message = empty_message
 
     def add_subnode(self, subnode: StateGraphNode) -> 'StateGraphProductNode':
         self._subnodes.append(subnode)
@@ -39,6 +40,10 @@ class StateGraphProductNode(StateGraphNode):
         return self._subnodes
     
     @property
+    def empty_message(self) -> StateGraphMessage:
+        return self._empty_message
+    
+    @property
     def edges(self) -> Iterable[StateGraphEdge]:
         if self._edges is None:
             self._edges = list(self._compute_edges())
@@ -47,7 +52,7 @@ class StateGraphProductNode(StateGraphNode):
     def _compute_edges(self):
         for index, subnode in enumerate(self._subnodes):
             for edge in subnode.edges:
-                product_target_node = StateGraphProductNode()
+                product_target_node = StateGraphProductNode((), self._empty_message)
                 product_message = StateGraphProductMessage([])
                 for other_index, other_subnode in enumerate(self.subnodes):
                     if index == other_index:
@@ -55,8 +60,8 @@ class StateGraphProductNode(StateGraphNode):
                         product_message.add_submessage(edge.trigger)
                     else:
                         product_target_node.add_subnode(other_subnode)
-                        product_message.add_submessage(None)
-                if all(submsg is None for submsg in product_message.submessages):
+                        product_message.add_submessage(self._empty_message)
+                if all(submsg is self._empty_message for submsg in product_message.submessages):
                     product_message = None
                 product_edge = StateGraphEdge(source=self, target=product_target_node, trigger=product_message, action=edge.action)
                 yield product_edge

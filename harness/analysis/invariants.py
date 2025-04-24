@@ -31,7 +31,7 @@ def find_invariant(state: StateGraphNode, other: StateGraphNode) -> Optional[Sta
             for subnode, other_subnode in zip(state.subnodes, other.subnodes)
         ]
         if any(subnode != StateGraphPlaceholderNode() for subnode in subnodes):
-            return StateGraphProductNode(subnodes)
+            return StateGraphProductNode(subnodes, state.empty_message)
         else:
             return StateGraphPlaceholderNode()
         
