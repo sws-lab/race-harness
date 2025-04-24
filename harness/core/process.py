@@ -1,7 +1,7 @@
 import io
 import dataclasses
 from typing import Callable, Optional, List, Iterable, Tuple
-from harness.state_graph import StateGraphNode, StateGraphMessageParticipant, StateGraphMessage, StateGraphMessageDestination, StateGraphEdge, StateGraphMessageEnvelope
+from harness.core.state_graph import StateGraphNode, StateGraphMessageParticipant, StateGraphMessage, StateGraphMessageDestination, StateGraphEdge, StateGraphMessageEnvelope
 
 @dataclasses.dataclass
 class ProcessMailboxEntry:

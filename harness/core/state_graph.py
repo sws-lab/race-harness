@@ -1,6 +1,6 @@
 import abc
 import dataclasses
-from typing import Collection, Iterable, Set, Optional
+from typing import Iterable, Optional
 
 class StateGraphMessage(abc.ABC):
     @property

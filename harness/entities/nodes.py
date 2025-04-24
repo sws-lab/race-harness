@@ -1,6 +1,6 @@
 from typing import Optional, Iterable, List
-from harness.state_graph import StateGraphNode, StateGraphMessage, StateGraphAction, StateGraphEdge, StateGraphMessageEnvelope, StateGraphMessageDestination, StateGraphMessageParticipant
-from harness.process import Process
+from harness.core import StateGraphEdge, StateGraphMessage, StateGraphNode, StateGraphAction
+from harness.entities.messages import StateGraphProductMessage
 
 class StateGraphSimpleNode(StateGraphNode):
     def __init__(self, mnemonic: str):
@@ -15,96 +15,7 @@ class StateGraphSimpleNode(StateGraphNode):
     @property
     def edges(self) -> Iterable[StateGraphEdge]:
         return self._edges.values()
-    
-class StateGraphSimpleAction(StateGraphAction):
-    def __init__(self, mnemonic: str):
-        super().__init__(mnemonic=mnemonic)
-        self._envelopes = list()
 
-    @property
-    def message_envelopes(self) -> Iterable[StateGraphMessageEnvelope]:
-        return self._envelopes
-    
-    def add_envelope(self, destination: StateGraphMessageDestination, message: StateGraphMessage) -> 'StateGraphSimpleAction':
-        self._envelopes.append(StateGraphMessageEnvelope(destination=destination, message=message))
-        return self
-    
-class StateGraphSimpleMessage(StateGraphMessage):
-    def __init__(self, mnemonic: str):
-        self._mnemonic = mnemonic
-
-    @property
-    def mnemonic(self) -> str:
-        return self._mnemonic
-    
-    def __eq__(self, value):
-        return isinstance(value, StateGraphSimpleMessage) and value.mnemonic == self.mnemonic
-    
-    def __hash__(self):
-        return hash(self.mnemonic)
-    
-class StateGraphProductMessage(StateGraphMessage):
-    def __init__(self, submessages: Iterable[Optional[StateGraphMessage]]):
-        super().__init__()
-        self._submessages = list(submessages)
-
-    def add_submessage(self, message: StateGraphMessage) -> 'StateGraphProductMessage':
-        self._submessages.append(message)
-        return self
-
-    @property
-    def mnemonic(self) -> str:
-        return '({})'.format(', '.join(
-            str(msg)
-            for msg in self._submessages
-        ))
-    
-    @property
-    def submessages(self) -> List[StateGraphMessage]:
-        return self._submessages.copy()
-    
-    def __eq__(self, value):
-        if not isinstance(value, StateGraphProductMessage):
-            return False
-        if len(self._submessages) != len(value.submessages):
-            return False
-        for own_msg, other_msg in zip(self.submessages, value.submessages):
-            if own_msg != other_msg:
-                return False
-        return True
-    
-    def __hash__(self):
-        res = 0
-        for msg in self.submessages:
-            res = res * 31 + hash(msg)
-        return res
-    
-class StateGraphResponseMessageDestination(StateGraphMessageDestination):
-    def __init__(self):
-        super().__init__()
-    
-    @property
-    def mnemonic(self) -> str:
-        return '%RESPONSE%'
-    
-    def matches(self, destination: StateGraphMessageParticipant, in_response_to: Optional[StateGraphMessageParticipant]) -> bool:
-        return destination == in_response_to
-    
-class StateGraphResponseGroupDestination(StateGraphMessageDestination):
-    def __init__(self, recipients: Iterable[StateGraphResponseMessageDestination]):
-        super().__init__()
-        self._recipients = list(recipients)
-    
-    @property
-    def mnemonic(self) -> str:
-        return '[{}]'.format(', '.join(
-            str(recipient)
-            for recipient in self._recipients
-        ))
-    
-    def matches(self, destination: StateGraphMessageParticipant, in_response_to: Optional[StateGraphMessageParticipant]) -> bool:
-        return any(recipient.matches(destination, in_response_to) for recipient in self._recipients)
-    
 class StateGraphProductNode(StateGraphNode):
     def __init__(self, subnodes: Optional[List[StateGraphNode]] = None):
         super().__init__(mnemonic='()')
@@ -193,19 +104,3 @@ class StateGraphPlaceholderNode(StateGraphNode):
 
     def __eq__(self, value):
         return isinstance(value, StateGraphPlaceholderNode)
-
-def product_message_mapping_from(senders: List['Process']):
-    def construct_product_message(index: int, message: StateGraphProductMessage):
-        submessages = list()
-        for i in range(len(senders)):
-            if index == i:
-                submessages.append(message)
-            else:
-                submessages.append(None)
-        return StateGraphProductMessage(submessages)
-    def mapping(source: StateGraphMessageParticipant, message: StateGraphMessage) -> Optional[StateGraphProductMessage]:
-        for index, sender in enumerate(senders):
-            if sender == source:
-                return construct_product_message(index, message)
-        return None
-    return mapping

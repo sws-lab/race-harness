@@ -1,6 +1,6 @@
-from harness.process_set import ProcessSet
-from harness.graph_nodes import StateGraphSimpleNode, StateGraphSimpleAction, StateGraphSimpleMessage, StateGraphProductNode, StateGraphDerivedNode, StateGraphResponseMessageDestination, product_message_mapping_from, StateGraphResponseGroupDestination
-from harness.invariants import derive_invariant_for
+from harness.core import ProcessSet
+from harness.entities import StateGraphSimpleNode, StateGraphSimpleAction, StateGraphSimpleMessage, StateGraphProductNode, StateGraphDerivedNode, StateGraphResponseMessageDestination, StateGraphProductMessage, StateGraphResponseGroupDestination
+from harness.analysis import derive_invariant_for
 
 # Process set with parameterized number of clients
 def generate_process_set(num_of_clients: int) -> ProcessSet:
@@ -39,7 +39,7 @@ def generate_process_set(num_of_clients: int) -> ProcessSet:
     tty_driver_unloaded_msg = StateGraphSimpleMessage(mnemonic='tty_driver_unloaded')
 
     # Message maps -- this is only needed to map individual client connection/disconnection request to a single compound "loaded" state of the driver.
-    tty_driver.add_message_mapping(product_message_mapping_from(tty_clients))
+    tty_driver.add_message_mapping(StateGraphProductMessage.product_message_mapping_from(tty_clients))
 
     # Actions -- actions are used to represent harness C code "payload" attached to state machine transitions + virtual messages to be sent upon transition
     noop_action = StateGraphSimpleAction(mnemonic='noop')

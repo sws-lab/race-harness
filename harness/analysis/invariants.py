@@ -1,8 +1,6 @@
 from typing import Iterable, Optional
-from harness.state_graph import StateGraphNode
-from harness.process import Process
-from harness.process_set import ProcessSetState
-from harness.graph_nodes import StateGraphDerivedNode, StateGraphProductNode, StateGraphPlaceholderNode
+from harness.core import StateGraphNode, Process, ProcessSetState
+from harness.entities import StateGraphDerivedNode, StateGraphProductNode, StateGraphPlaceholderNode
 
 def filter_process_set_states_for(process: Process, state: StateGraphNode, invariant_process: Process, trace: Iterable[ProcessSetState]) -> Iterable[ProcessSetState]:
     for psstate in trace:

@@ -1,8 +1,8 @@
 import io
 from typing import Iterable, Dict, Tuple, Optional
-from harness.process import Process, ProcessState
-from harness.state_graph import StateGraphNode
-from harness.error import HarnessError
+from harness.core.process import Process, ProcessState
+from harness.core.state_graph import StateGraphNode
+from harness.core.error import HarnessError
 
 class ProcessSetState:
     def __init__(self, state: Dict[Process, ProcessState]):
