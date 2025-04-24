@@ -136,6 +136,18 @@ class StateGraphNode(abc.ABC):
             yield self
             visited.add(self)
 
+    @property
+    def all_nodes(self) -> Iterable['StateGraphNode']:
+        visited = set()
+        pending = [self]
+        while len(pending) > 0:
+            node = pending.pop()
+            if node not in visited:
+                yield node
+                visited.add(node)
+                for edge in node.edges:
+                    pending.append(edge.target)
+
     def matches(self, value: 'StateGraphNode'):
         return self.is_placeholder or value.is_placeholder or self == value
 

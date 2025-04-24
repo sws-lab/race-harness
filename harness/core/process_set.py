@@ -101,12 +101,12 @@ class ProcessSet:
 
     def add_process(self, mnemonic: str, entry_node: StateGraphNode) -> Process:
         process = Process(mnemonic=mnemonic, entry_node=entry_node)
-        self._processes[mnemonic] = process
+        self._processes[process] = process
         return process
     
     @property
     def processes(self) -> Iterable[Process]:
-        return self._processes.values()
+        return self._processes.keys()
     
     @property
     def initial_state(self) -> ProcessSetState:
@@ -114,3 +114,9 @@ class ProcessSet:
             process: process.initial_state
             for process in self.processes
         })
+    
+    def __contains__(self, item) -> bool:
+        return item in self._processes
+    
+    def __iter__(self) -> Iterable[Process]:
+        yield from self.processes
