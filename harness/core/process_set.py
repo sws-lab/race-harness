@@ -5,8 +5,13 @@ from harness.core.state_graph import StateGraphNode
 from harness.core.error import HarnessError
 
 class ProcessSetState:
-    def __init__(self, state: Dict[Process, ProcessState]):
+    def __init__(self, process_set: 'ProcessSet', state: Dict[Process, ProcessState]):
+        self._process_set = process_set
         self._state = state.copy()
+
+    @property
+    def process_set(self) -> 'ProcessSet':
+        return self._process_set
 
     @property
     def processes(self) -> Iterable[Process]:
@@ -43,6 +48,13 @@ class ProcessSetState:
             for process in self.processes:
                 yield from self._next_states_for(process)
 
+    @property
+    def state_space(self) -> 'ProcessSetStateSpace':
+        return ProcessSetStateSpace(
+            process_set=self.process_set,
+            states=self.reachable_states(include_self=True)
+        )
+
     def _next_states_for(self, process: Process) -> Iterable['ProcessSetState']:
         for next_process_state, outgoing_messages in self._state[process].next_states:
             new_state = {
@@ -57,7 +69,7 @@ class ProcessSetState:
                     new_state[other_process] = new_state[other_process].push_message(origin=process, message=envelope.message)
                 if not has_destinations:
                     raise HarnessError(f'Message {envelope.message} for {envelope.destination} from {process} has no matching destinations')
-            yield ProcessSetState(state=new_state)
+            yield ProcessSetState(process_set=self.process_set, state=new_state)
 
     def __str__(self) -> str:
         out = io.StringIO()
@@ -110,13 +122,43 @@ class ProcessSet:
     
     @property
     def initial_state(self) -> ProcessSetState:
-        return ProcessSetState(state={
+        return ProcessSetState(process_set=self, state={
             process: process.initial_state
             for process in self.processes
         })
+    
+    @property
+    def state_space(self) -> 'ProcessSetStateSpace':
+        return self.initial_state.state_space
     
     def __contains__(self, item) -> bool:
         return item in self._processes
     
     def __iter__(self) -> Iterable[Process]:
         yield from self.processes
+
+class ProcessSetStateSpace:
+    def __init__(self, process_set: ProcessSet, states: Iterable[ProcessSetState]):
+        self._process_set = process_set
+        self._states = { # For ordering stability
+            state: state
+            for state in states
+        }
+
+    @property
+    def process_set(self) -> ProcessSet:
+        return self._process_set
+
+    @property
+    def states(self) -> Iterable[ProcessSetState]:
+        yield from self._states.keys()
+
+    def __contains__(self, value):
+        return value in self._states
+    
+    def __iter__(self) -> Iterable[ProcessSetState]:
+        return self.states
+    
+    def derive_invariant(self, process: Process, state: StateGraphNode, invariant_process: Process) -> 'ProcessStateInvariant':
+        from harness.core.invariants import ProcessStateInvariant
+        return ProcessStateInvariant.derive(psstates=self, process=process, state=state, invariant_process=invariant_process)

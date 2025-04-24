@@ -77,6 +77,23 @@ tty_driver_client_active_substate.add_edge(trigger=tty_client_disconnect_msg, ta
 # Note that for the compound "loaded" state we only permit unloading when all clients are inactive
 tty_driver_loaded_state.add_edge(match_base=tty_driver_all_clients_inactive_substate, trigger=None, target=tty_driver_unloaded_state, action=tty_driver_unload_action)
 
+# Obtain complete state space for the system and derive some invariants
+state_space = processes.state_space
+tty_client_invariants = [
+    *(
+        state_space.derive_invariant(process=client, state=tty_client_connected_state, invariant_process=tty_driver)
+        for client in tty_clients
+    ),
+    *(
+        state_space.derive_invariant(process=client, state=tty_client_wait_connection_state, invariant_process=tty_driver)
+        for client in tty_clients
+    ),
+    *(
+        state_space.derive_invariant(process=client, state=tty_client_disconnected_state, invariant_process=tty_driver)
+        for client in tty_clients
+    )
+]
+
 # Now let's prepare templates for processes
 tty_driver_template = KernelModuleHarnessProcessTemplate(tty_driver.entry_node)
 tty_driver_template.define_action(tty_driver_load_action, 'init_module();')
@@ -99,4 +116,6 @@ for client in tty_clients:
     codegen.set_process_template(client, tty_client_template, {
         'client_buffer': client.mnemonic
     })
+for invariant in tty_client_invariants:
+    codegen.add_invariant(invariant)
 print(codegen.generate())

@@ -1,3 +1,10 @@
+static mutex harness_kernel_module_invariant_tty_client1_tty_client_connected_state_tty_driver = MUTEX_INIT;
+static mutex harness_kernel_module_invariant_tty_client2_tty_client_connected_state_tty_driver = MUTEX_INIT;
+static mutex harness_kernel_module_invariant_tty_client1_tty_client_wait_connection_tty_driver = MUTEX_INIT;
+static mutex harness_kernel_module_invariant_tty_client2_tty_client_wait_connection_tty_driver = MUTEX_INIT;
+static mutex harness_kernel_module_invariant_tty_client1_tty_client_disconnected_tty_driver = MUTEX_INIT;
+static mutex harness_kernel_module_invariant_tty_client2_tty_client_disconnected_tty_driver = MUTEX_INIT;
+
 void *harness_kernel_module_process_tty_client1(void *harness_kernel_module_process_arg) {
   (void) harness_kernel_module_process_arg; // UNUSED
   struct tty_struct tty;
@@ -19,6 +26,7 @@ void *harness_kernel_module_process_tty_client1(void *harness_kernel_module_proc
       break;
     
     case 1: /* tty_client_disconnected */
+      mutex_lock(&harness_kernel_module_invariant_tty_client1_tty_client_disconnected_tty_driver)
       switch (RANDOM() % 3) {
         case 0:
           harness_kernel_module_process_state = 1; /* tty_client_disconnected */
@@ -33,9 +41,11 @@ void *harness_kernel_module_process_tty_client1(void *harness_kernel_module_proc
           break;
         
       }
+      mutex_unlock(&harness_kernel_module_invariant_tty_client1_tty_client_disconnected_tty_driver)
       break;
     
     case 2: /* tty_client_wait_connection */
+      mutex_lock(&harness_kernel_module_invariant_tty_client1_tty_client_wait_connection_tty_driver)
       switch (RANDOM() % 3) {
         case 0:
           harness_kernel_module_process_state = 2; /* tty_client_wait_connection */
@@ -53,9 +63,11 @@ void *harness_kernel_module_process_tty_client1(void *harness_kernel_module_proc
           break;
         
       }
+      mutex_unlock(&harness_kernel_module_invariant_tty_client1_tty_client_wait_connection_tty_driver)
       break;
     
     case 3: /* tty_client_connected_state */
+      mutex_lock(&harness_kernel_module_invariant_tty_client1_tty_client_connected_state_tty_driver)
       switch (RANDOM() % 2) {
         case 0:
           {
@@ -72,6 +84,7 @@ void *harness_kernel_module_process_tty_client1(void *harness_kernel_module_proc
           break;
         
       }
+      mutex_unlock(&harness_kernel_module_invariant_tty_client1_tty_client_connected_state_tty_driver)
       break;
     
   }
@@ -99,6 +112,7 @@ void *harness_kernel_module_process_tty_client2(void *harness_kernel_module_proc
       break;
     
     case 1: /* tty_client_disconnected */
+      mutex_lock(&harness_kernel_module_invariant_tty_client2_tty_client_disconnected_tty_driver)
       switch (RANDOM() % 3) {
         case 0:
           harness_kernel_module_process_state = 1; /* tty_client_disconnected */
@@ -113,9 +127,11 @@ void *harness_kernel_module_process_tty_client2(void *harness_kernel_module_proc
           break;
         
       }
+      mutex_unlock(&harness_kernel_module_invariant_tty_client2_tty_client_disconnected_tty_driver)
       break;
     
     case 2: /* tty_client_wait_connection */
+      mutex_lock(&harness_kernel_module_invariant_tty_client2_tty_client_wait_connection_tty_driver)
       switch (RANDOM() % 3) {
         case 0:
           harness_kernel_module_process_state = 2; /* tty_client_wait_connection */
@@ -133,9 +149,11 @@ void *harness_kernel_module_process_tty_client2(void *harness_kernel_module_proc
           break;
         
       }
+      mutex_unlock(&harness_kernel_module_invariant_tty_client2_tty_client_wait_connection_tty_driver)
       break;
     
     case 3: /* tty_client_connected_state */
+      mutex_lock(&harness_kernel_module_invariant_tty_client2_tty_client_connected_state_tty_driver)
       switch (RANDOM() % 2) {
         case 0:
           {
@@ -152,6 +170,7 @@ void *harness_kernel_module_process_tty_client2(void *harness_kernel_module_proc
           break;
         
       }
+      mutex_unlock(&harness_kernel_module_invariant_tty_client2_tty_client_connected_state_tty_driver)
       break;
     
   }
@@ -163,6 +182,10 @@ void *harness_kernel_module_process_tty_driver(void *harness_kernel_module_proce
   unsigned long harness_kernel_module_process_state = 0;
   switch (harness_kernel_module_process_state) {{
     case 0: /* tty_driver_unloaded */
+      mutex_lock(&harness_kernel_module_invariant_tty_client1_tty_client_connected_state_tty_driver)
+      mutex_lock(&harness_kernel_module_invariant_tty_client2_tty_client_connected_state_tty_driver)
+      mutex_lock(&harness_kernel_module_invariant_tty_client1_tty_client_wait_connection_tty_driver)
+      mutex_lock(&harness_kernel_module_invariant_tty_client2_tty_client_wait_connection_tty_driver)
       switch (RANDOM() % 2) {
         case 0:
           harness_kernel_module_process_state = 0; /* tty_driver_unloaded */
@@ -176,9 +199,15 @@ void *harness_kernel_module_process_tty_driver(void *harness_kernel_module_proce
           break;
         
       }
+      mutex_unlock(&harness_kernel_module_invariant_tty_client2_tty_client_wait_connection_tty_driver)
+      mutex_unlock(&harness_kernel_module_invariant_tty_client1_tty_client_wait_connection_tty_driver)
+      mutex_unlock(&harness_kernel_module_invariant_tty_client2_tty_client_connected_state_tty_driver)
+      mutex_unlock(&harness_kernel_module_invariant_tty_client1_tty_client_connected_state_tty_driver)
       break;
     
     case 1: /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive) */
+      mutex_lock(&harness_kernel_module_invariant_tty_client1_tty_client_connected_state_tty_driver)
+      mutex_lock(&harness_kernel_module_invariant_tty_client2_tty_client_connected_state_tty_driver)
       switch (RANDOM() % 3) {
         case 0:
           {
@@ -196,9 +225,12 @@ void *harness_kernel_module_process_tty_driver(void *harness_kernel_module_proce
           break;
         
       }
+      mutex_unlock(&harness_kernel_module_invariant_tty_client2_tty_client_connected_state_tty_driver)
+      mutex_unlock(&harness_kernel_module_invariant_tty_client1_tty_client_connected_state_tty_driver)
       break;
     
     case 2: /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active) */
+      mutex_lock(&harness_kernel_module_invariant_tty_client1_tty_client_connected_state_tty_driver)
       switch (RANDOM() % 2) {
         case 0:
           harness_kernel_module_process_state = 3; /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_active) */
@@ -209,6 +241,7 @@ void *harness_kernel_module_process_tty_driver(void *harness_kernel_module_proce
           break;
         
       }
+      mutex_unlock(&harness_kernel_module_invariant_tty_client1_tty_client_connected_state_tty_driver)
       break;
     
     case 3: /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_active) */
@@ -225,6 +258,7 @@ void *harness_kernel_module_process_tty_driver(void *harness_kernel_module_proce
       break;
     
     case 4: /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive) */
+      mutex_lock(&harness_kernel_module_invariant_tty_client2_tty_client_connected_state_tty_driver)
       switch (RANDOM() % 2) {
         case 0:
           harness_kernel_module_process_state = 1; /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive) */
@@ -235,6 +269,7 @@ void *harness_kernel_module_process_tty_driver(void *harness_kernel_module_proce
           break;
         
       }
+      mutex_unlock(&harness_kernel_module_invariant_tty_client2_tty_client_connected_state_tty_driver)
       break;
     
   }

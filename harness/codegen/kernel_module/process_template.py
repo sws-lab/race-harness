@@ -1,4 +1,4 @@
-from typing import Callable, Union, Optional, Dict
+from typing import Callable, Union, Optional, Dict, Iterable
 from harness.core import StateGraphNode, Process, StateGraphAction, StateGraphEdge
 from harness.codegen.kernel_module.utils import IndentedLineGenerator, IndentedLine
 from harness.codegen.error import HarnessCodegenError
@@ -31,7 +31,7 @@ class KernelModuleHarnessProcessTemplate:
     def process_function_name(process: Process) -> str:
         return f'harness_kernel_module_process_{process.mnemonic}'
     
-    def generate(self, process: Process, specialization: Optional[Dict] = None) -> IndentedLineGenerator:
+    def generate(self, process: Process, specialization: Optional[Dict], invariants_getter: Callable[[Process, StateGraphNode], Iterable[str]]) -> IndentedLineGenerator:
         if not self.matches(process):
             raise HarnessCodegenError(f'Process {process.mnemonic} does not match the template')
 
@@ -49,6 +49,9 @@ class KernelModuleHarnessProcessTemplate:
         for node, node_state_index in self._node_enumeration.items():
             yield f'case {node_state_index}: /* {node.mnemonic} */'
             yield 1
+            invariants = list(invariants_getter(process, node))
+            for invariant in invariants:
+                yield f'mutex_lock(&{invariant})'
             node_edges = list(node.edges)
             yield f'switch ({self._random(len(node_edges))}) {{'
             yield 1
@@ -70,6 +73,8 @@ class KernelModuleHarnessProcessTemplate:
                 yield 'break;'
                 yield IndentedLine(relative_indent=-1, line='')
             yield IndentedLine(relative_indent=-1, line='}')
+            for invariant in reversed(invariants):
+                yield f'mutex_unlock(&{invariant})'
             yield 'break;'
             yield IndentedLine(relative_indent=-1, line='')
         yield IndentedLine(relative_indent=-1, line='}')
