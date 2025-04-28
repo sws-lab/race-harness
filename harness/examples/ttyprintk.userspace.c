@@ -1,26 +1,21 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <pthread.h>
 
-#include "linux/compiler_types.h"
-#include "linux/kconfig.h"
-#include "asm/orc_header.h"
-#include "linux/build-salt.h"
-#include "linux/console.h"
-#include "linux/device.h"
-#include "linux/elfnote-lto.h"
-#include "linux/export-internal.h"
-#include "linux/module.h"
-#include "linux/serial.h"
-#include "linux/tty.h"
+#define __harness_mutex pthread_mutex_t
+#define __harness_thread pthread_t
+#define __harness_thread_create pthread_create
+#define __harness_thread_join pthread_join
+#define __harness_mutex_init pthread_mutex_init
+#define __harness_mutex_lock pthread_mutex_lock
+#define __harness_mutex_unlock pthread_mutex_unlock
+#define __harness_random rand()
 
-typedef long __harness_mutex;
-typedef long __harness_thread;
-void __harness_thread_create(__harness_thread *, void *, void *(*)(void *), void *);
-void __harness_thread_join(__harness_thread, void *);
-void __harness_mutex_init(__harness_mutex *, void *);
-void __harness_mutex_lock(__harness_mutex *);
-void __harness_mutex_unlock(__harness_mutex *);
-extern volatile long __harness_random;
-
-extern struct tty_driver *registered_tty_driver;
+struct S1 {
+  _Atomic int connections;
+  _Atomic int value;
+};
+static struct S1 *s1_ptr;
       
 
 static __harness_mutex harness_state_mutex;
@@ -31,9 +26,6 @@ static unsigned long process_tty_driver_state;
 
 void *harness_kernel_module_process_tty_client1(void *harness_kernel_module_process_arg) {
   (void) harness_kernel_module_process_arg; // UNUSED
-  struct tty_struct tty;
-  struct file file;
-  const char content[] = "tty_client1";
   
   for (;;) {
     __harness_mutex_lock(&harness_state_mutex);
@@ -130,7 +122,7 @@ void *harness_kernel_module_process_tty_client1(void *harness_kernel_module_proc
             __harness_mutex_unlock(&harness_state_mutex);
             
             if (state_transition_permitted) {
-              registered_tty_driver->ops->open(&tty, &file);
+              s1_ptr->connections++;
             }
             break;
           
@@ -161,7 +153,7 @@ void *harness_kernel_module_process_tty_client1(void *harness_kernel_module_proc
             __harness_mutex_unlock(&harness_state_mutex);
             
             if (state_transition_permitted) {
-              registered_tty_driver->ops->write(&tty, content, sizeof(content));
+              s1_ptr->value++;
             }
             break;
           
@@ -176,7 +168,7 @@ void *harness_kernel_module_process_tty_client1(void *harness_kernel_module_proc
             __harness_mutex_unlock(&harness_state_mutex);
             
             if (state_transition_permitted) {
-              registered_tty_driver->ops->close(&tty, &file);
+              s1_ptr->connections--;
             }
             break;
           
@@ -217,9 +209,6 @@ void *harness_kernel_module_process_tty_client1(void *harness_kernel_module_proc
 
 void *harness_kernel_module_process_tty_client2(void *harness_kernel_module_process_arg) {
   (void) harness_kernel_module_process_arg; // UNUSED
-  struct tty_struct tty;
-  struct file file;
-  const char content[] = "tty_client2";
   
   for (;;) {
     __harness_mutex_lock(&harness_state_mutex);
@@ -316,7 +305,7 @@ void *harness_kernel_module_process_tty_client2(void *harness_kernel_module_proc
             __harness_mutex_unlock(&harness_state_mutex);
             
             if (state_transition_permitted) {
-              registered_tty_driver->ops->open(&tty, &file);
+              s1_ptr->connections++;
             }
             break;
           
@@ -347,7 +336,7 @@ void *harness_kernel_module_process_tty_client2(void *harness_kernel_module_proc
             __harness_mutex_unlock(&harness_state_mutex);
             
             if (state_transition_permitted) {
-              registered_tty_driver->ops->write(&tty, content, sizeof(content));
+              s1_ptr->value++;
             }
             break;
           
@@ -362,7 +351,7 @@ void *harness_kernel_module_process_tty_client2(void *harness_kernel_module_proc
             __harness_mutex_unlock(&harness_state_mutex);
             
             if (state_transition_permitted) {
-              registered_tty_driver->ops->close(&tty, &file);
+              s1_ptr->connections--;
             }
             break;
           
@@ -434,7 +423,10 @@ void *harness_kernel_module_process_tty_driver(void *harness_kernel_module_proce
             __harness_mutex_unlock(&harness_state_mutex);
             
             if (state_transition_permitted) {
-              init_module();
+              static struct S1 s1;
+              s1.connections = 0;
+              s1.value = 0;
+              s1_ptr = &s1;
             }
             break;
           
@@ -481,7 +473,7 @@ void *harness_kernel_module_process_tty_driver(void *harness_kernel_module_proce
             __harness_mutex_unlock(&harness_state_mutex);
             
             if (state_transition_permitted) {
-              cleanup_module();
+              s1_ptr = NULL;
             }
             break;
           

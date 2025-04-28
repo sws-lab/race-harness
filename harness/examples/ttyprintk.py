@@ -2,7 +2,7 @@ from harness.core import ProcessSet
 from harness.entities import StateGraphSimpleNode, StateGraphSimpleAction, StateGraphSimpleMessage, StateGraphProductNode, StateGraphDerivedNode, StateGraphResponseMessageDestination, StateGraphProductMessage, StateGraphResponseGroupDestination
 from harness.codegen.kernel_module import KernelModuleHarnessGenerator, KernelModuleHarnessProcessTemplate
 
-NUM_OF_CLIENTS = 1
+NUM_OF_CLIENTS = 2
 
 # Messages are quite simple. Driver might communicate to the clients that it has been loaded
 # (in reality there is no such communication, but corresponding invariant is simply upheld by the kernel).
@@ -13,16 +13,19 @@ tty_driver_loaded_msg = StateGraphSimpleMessage(mnemonic='tty_driver_loaded')
 tty_client_request_connection_msg = StateGraphSimpleMessage(mnemonic='tty_client_request_connection')
 tty_driver_grant_connection_msg = StateGraphSimpleMessage(mnemonic='tty_driver_grant_connection')
 tty_client_disconnect_msg = StateGraphSimpleMessage(mnemonic='tty_client_disconnect')
-tty_driver_unloaded_msg = StateGraphSimpleMessage(mnemonic='tty_driver_unloaded')
+tty_driver_unloading_msg = StateGraphSimpleMessage(mnemonic='tty_driver_unloading')
 
 # Client states are simple (here by "connection" I mean acquiring API handle for driver within the kernel, or something similar)
 tty_client_nodriver_state = StateGraphSimpleNode(mnemonic='tty_client_nodriver') # No driver loaded => client cannot be connected
 tty_client_disconnected_state = StateGraphSimpleNode(mnemonic='tty_client_disconnected') # There is a driver loaded, but client is not connected
+tty_client_disconnecting_state = StateGraphSimpleNode(mnemonic='tty_client_disconnecting') # The client is diconnecting
 tty_client_wait_connection_state = StateGraphSimpleNode(mnemonic='tty_client_wait_connection') # Client has requested connection to the driver (i.e. client attemps to acquire a handle in the kernel)
 tty_client_connected_state = StateGraphSimpleNode(mnemonic='tty_client_connected_state') # Client is connected to the driver and can interact with TTY
 
 # Driver states are a bit more complex
 tty_driver_unloaded_state = StateGraphSimpleNode(mnemonic='tty_driver_unloaded') # Driver is not loaded
+tty_driver_loading_state = StateGraphSimpleNode(mnemonic='tty_driver_loading') # Driver is in the process of loading
+tty_driver_unloading_state = StateGraphSimpleNode(mnemonic='tty_driver_unloading') # Driver is in the process of unloading
 # Now, the only remaining state of the driver is "being loaded", but this state is not scalar,
 # because in the driver we need to track each individual client state to avoid unloading if there are active users
 # (in reality this is guaranteed by the kernel). Thus, loaded state of the driver contains a substate for each individual
@@ -44,38 +47,47 @@ tty_driver.add_message_mapping(StateGraphProductMessage.product_message_mapping_
 
 # Actions -- actions are used to represent harness C code "payload" attached to state machine transitions + virtual messages to be sent upon transition
 noop_action = StateGraphSimpleAction(mnemonic='noop')
-tty_driver_load_action = StateGraphSimpleAction(mnemonic='tty_driver_load') \
+tty_driver_load_action = StateGraphSimpleAction(mnemonic='tty_driver_load')
+tty_driver_loaded_action = StateGraphSimpleAction(mnemonic='tty_driver_loaded') \
     .add_envelope(destination=StateGraphResponseGroupDestination(tty_clients), message=tty_driver_loaded_msg)
 tty_client_request_connection_action = StateGraphSimpleAction(mnemonic='tty_client_request_connection') \
     .add_envelope(destination=tty_driver, message=tty_client_request_connection_msg)
 tty_driver_grant_connection_action = StateGraphSimpleAction(mnemonic='tty_driver_grant_connection') \
     .add_envelope(destination=StateGraphResponseMessageDestination(), message=tty_driver_grant_connection_msg)
-tty_client_disconnect_action = StateGraphSimpleAction(mnemonic='tty_client_disconnect') \
+tty_client_disconnect_action = StateGraphSimpleAction(mnemonic='tty_client_disconnect')
+tty_client_disconnected_action = StateGraphSimpleAction(mnemonic='tty_client_disconnected') \
     .add_envelope(destination=tty_driver, message=tty_client_disconnect_msg)
 tty_client_acquire_connection_action = StateGraphSimpleAction(mnemonic='tty_client_acquire_connection')
 tty_client_use_connection_action = StateGraphSimpleAction(mnemonic='tty_client_use_connection')
 tty_driver_unload_action = StateGraphSimpleAction(mnemonic='tty_driver_unload') \
-    .add_envelope(destination=StateGraphResponseGroupDestination(tty_clients), message=tty_driver_unloaded_msg)
+    .add_envelope(destination=StateGraphResponseGroupDestination(tty_clients), message=tty_driver_unloading_msg)
+tty_driver_unloaded_action = StateGraphSimpleAction(mnemonic='tty_driver_unloaded')
 
 # Now, the actual state machine for the client
 tty_client_nodriver_state.add_edge(trigger=None, target=tty_client_nodriver_state, action=noop_action)
 tty_client_nodriver_state.add_edge(trigger=tty_driver_loaded_msg, target=tty_client_disconnected_state, action=noop_action)
 tty_client_disconnected_state.add_edge(trigger=None, target=tty_client_disconnected_state, action=noop_action)
 tty_client_disconnected_state.add_edge(trigger=None, target=tty_client_wait_connection_state, action=tty_client_request_connection_action)
-tty_client_disconnected_state.add_edge(trigger=tty_driver_unloaded_msg, target=tty_client_nodriver_state, action=noop_action)
+tty_client_disconnected_state.add_edge(trigger=tty_driver_unloading_msg, target=tty_client_nodriver_state, action=noop_action)
 tty_client_wait_connection_state.add_edge(trigger=None, target=tty_client_wait_connection_state, action=noop_action)
 tty_client_wait_connection_state.add_edge(trigger=tty_driver_grant_connection_msg, target=tty_client_connected_state, action=tty_client_acquire_connection_action)
-tty_client_wait_connection_state.add_edge(trigger=tty_driver_unloaded_msg, target=tty_client_nodriver_state, action=noop_action)
+tty_client_wait_connection_state.add_edge(trigger=tty_driver_unloading_msg, target=tty_client_nodriver_state, action=noop_action)
 tty_client_connected_state.add_edge(trigger=None, target=tty_client_connected_state, action=tty_client_use_connection_action)
-tty_client_connected_state.add_edge(trigger=None, target=tty_client_disconnected_state, action=tty_client_disconnect_action)
+tty_client_connected_state.add_edge(trigger=None, target=tty_client_disconnecting_state, action=tty_client_disconnect_action)
+tty_client_disconnecting_state.add_edge(trigger=None, target=tty_client_disconnecting_state, action=noop_action)
+tty_client_disconnecting_state.add_edge(trigger=None, target=tty_client_disconnected_state, action=tty_client_disconnected_action)
 
 # And for the driver
 tty_driver_unloaded_state.add_edge(trigger=None, target=tty_driver_unloaded_state, action=noop_action)
-tty_driver_unloaded_state.add_edge(trigger=None, target=tty_driver_loaded_state, action=tty_driver_load_action)
+tty_driver_unloaded_state.add_edge(trigger=None, target=tty_driver_loading_state, action=tty_driver_load_action)
+tty_driver_loading_state.add_edge(trigger=None, target=tty_driver_loading_state, action=noop_action)
+tty_driver_loading_state.add_edge(trigger=None, target=tty_driver_loaded_state, action=tty_driver_loaded_action)
 tty_driver_client_inactive_substate.add_edge(trigger=tty_client_request_connection_msg, target=tty_driver_client_active_substate, action=tty_driver_grant_connection_action)
 tty_driver_client_active_substate.add_edge(trigger=tty_client_disconnect_msg, target=tty_driver_client_inactive_substate, action=noop_action)
 # Note that for the compound "loaded" state we only permit unloading when all clients are inactive
-tty_driver_loaded_state.add_edge(match_base=tty_driver_all_clients_inactive_substate, trigger=None, target=tty_driver_unloaded_state, action=tty_driver_unload_action)
+tty_driver_loaded_state.add_edge(match_base=tty_driver_all_clients_inactive_substate, trigger=None, target=tty_driver_unloading_state, action=tty_driver_unload_action)
+tty_driver_unloading_state.add_edge(trigger=None, target=tty_driver_unloading_state, action=noop_action)
+tty_driver_unloading_state.add_edge(trigger=None, target=tty_driver_unloaded_state, action=tty_driver_unloaded_action)
 
 # Obtain complete state space for the system and derive some invariants
 state_space = processes.state_space
@@ -131,8 +143,8 @@ print('''
 typedef long __harness_mutex;
 typedef long __harness_thread;
 void __harness_thread_create(__harness_thread *, void *, void *(*)(void *), void *);
-void __harness_thread_join(__harness_thread *, void *);
-void __harness_mutex_init(__harness_mutex *);
+void __harness_thread_join(__harness_thread, void *);
+void __harness_mutex_init(__harness_mutex *, void *);
 void __harness_mutex_lock(__harness_mutex *);
 void __harness_mutex_unlock(__harness_mutex *);
 extern volatile long __harness_random;

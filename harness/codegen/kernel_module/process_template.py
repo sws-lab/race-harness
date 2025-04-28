@@ -7,10 +7,6 @@ class KernelModuleHarnessProcessTemplate:
     def __init__(self, entry_node: StateGraphNode, initializer: str = ''):
         self._entry_node = entry_node
         self._initializer = initializer
-        self._node_enumeration = {
-            node: index
-            for index, node in enumerate(entry_node.all_nodes)
-        }
         self._actions = dict()
     
     def matches(self, process: Process) -> bool:
@@ -31,7 +27,7 @@ class KernelModuleHarnessProcessTemplate:
     def process_function_name(process: Process) -> str:
         return f'harness_kernel_module_process_{process.mnemonic}'
     
-    def generate(self, process: Process, specialization: Optional[Dict], invariants_getter: Callable[[Process, StateGraphNode], Iterable[str]]) -> IndentedLineGenerator:
+    def generate(self, process: Process, specialization: Optional[Dict], invariants_getter: Callable[[Process, StateGraphNode], Iterable[str]], state_enumeration: Callable[[StateGraphNode], int]) -> IndentedLineGenerator:
         if not self.matches(process):
             raise HarnessCodegenError(f'Process {process.mnemonic} does not match the template')
 
@@ -43,45 +39,119 @@ class KernelModuleHarnessProcessTemplate:
                 if line.strip():
                     line = self._apply_specialization(line, specialization)
                     yield line
-        yield f'unsigned long harness_kernel_module_process_state = {self._node_enumeration[self._entry_node]};'
+        yield ''
+
         yield 'for (;;) {'
         yield 1
-        yield 'switch (harness_kernel_module_process_state) {'
+        yield f'__harness_mutex_lock(&harness_state_mutex);'
+        yield f'const unsigned long harness_process_state = process_{process.mnemonic}_state;'
+        yield 'int state_transition_permitted;'
+        yield f'__harness_mutex_unlock(&harness_state_mutex);'
+        yield 'switch (harness_process_state) {'
         yield 1
-        for node, node_state_index in self._node_enumeration.items():
-            yield f'case {node_state_index}: /* {node.mnemonic} */'
+
+        for node in self._entry_node.all_nodes:
+            yield f'case {state_enumeration(node)}: /* {node.mnemonic} */'
             yield 1
-            invariants = list(invariants_getter(process, node))
-            for invariant in invariants:
-                yield f'__harness_mutex_lock(&{invariant});'
+
             node_edges = list(node.edges)
             yield f'switch ({self._random(len(node_edges))}) {{'
             yield 1
             for edge_index, edge in enumerate(node_edges):
-                yield f'case {edge_index}:'
+                yield f'case {edge_index}: /* {edge.target.mnemonic} */'
                 yield 1
-                action = self._actions.get(edge.action, None)
-                if action is not None:
-                    if not isinstance(action, str):
-                        action = action(edge)
-                    action = self._apply_specialization(action, specialization)
-                    yield '{'
+                
+                invariants = dict()
+                for invariant_process, invariant_state in invariants_getter(process, edge.target):
+                    if invariant_process not in invariants:
+                        invariants[invariant_process] = list()
+                    invariants[invariant_process].append(invariant_state)
+                transition_guard = ' && '.join(
+                    '({})'.format(
+                        ' || '.join(
+                            f'process_{process}_state == {state_enumeration(state)}'
+                            for state in states
+                        )
+                    )
+                    for process, states in invariants.items()
+                )
+                yield f'__harness_mutex_lock(&harness_state_mutex);'
+                yield f'if ({transition_guard}) {{'
+                yield 1
+                yield 'state_transition_permitted = 1;'
+                yield f'process_{process.mnemonic}_state = {state_enumeration(edge.target)};'
+                yield -1
+                yield '} else {'
+                yield 1
+                yield 'state_transition_permitted = 0;'
+                yield -1
+                yield '}'
+                yield f'__harness_mutex_unlock(&harness_state_mutex);'
+                action = self._actions.get(edge.action)
+                if action:
+                    yield ''
+                    yield 'if (state_transition_permitted) {'
                     yield 1
                     for line in action.split('\n'):
                         if line.strip():
                             yield line
-                    yield IndentedLine(relative_indent=-1, line='}')
-                yield f'harness_kernel_module_process_state = {self._node_enumeration[edge.target]}; /* {edge.target.mnemonic} */'
+                    yield -1
+                    yield '}'
+
+
                 yield 'break;'
-                yield IndentedLine(relative_indent=-1, line='')
-            yield IndentedLine(relative_indent=-1, line='}')
-            for invariant in reversed(invariants):
-                yield f'__harness_mutex_unlock(&{invariant});'
+                yield -1
+                yield ''
+            yield -1
+            yield '}'
+
             yield 'break;'
-            yield IndentedLine(relative_indent=-1, line='')
-        yield IndentedLine(relative_indent=-1, line='}')
+            yield -1
+            yield ''
+
         yield -1
         yield '}'
+        yield -1
+        yield '}'
+        # yield f'unsigned long harness_kernel_module_process_state = {self._node_enumeration[self._entry_node]};'
+        # yield 'for (;;) {'
+        # yield 1
+        # yield 'switch (harness_kernel_module_process_state) {'
+        # yield 1
+        # for node, node_state_index in self._node_enumeration.items():
+        #     yield f'case {node_state_index}: /* {node.mnemonic} */'
+        #     yield 1
+        #     invariants = list(invariants_getter(process, node))
+        #     for invariant in invariants:
+        #         yield f'__harness_mutex_lock(&{invariant});'
+        #     node_edges = list(node.edges)
+        #     yield f'switch ({self._random(len(node_edges))}) {{'
+        #     yield 1
+        #     for edge_index, edge in enumerate(node_edges):
+        #         yield f'case {edge_index}:'
+        #         yield 1
+        #         action = self._actions.get(edge.action, None)
+        #         if action is not None:
+        #             if not isinstance(action, str):
+        #                 action = action(edge)
+        #             action = self._apply_specialization(action, specialization)
+        #             yield '{'
+        #             yield 1
+        #             for line in action.split('\n'):
+        #                 if line.strip():
+        #                     yield line
+        #             yield IndentedLine(relative_indent=-1, line='}')
+        #         yield f'harness_kernel_module_process_state = {self._node_enumeration[edge.target]}; /* {edge.target.mnemonic} */'
+        #         yield 'break;'
+        #         yield IndentedLine(relative_indent=-1, line='')
+        #     yield IndentedLine(relative_indent=-1, line='}')
+        #     for invariant in reversed(invariants):
+        #         yield f'__harness_mutex_unlock(&{invariant});'
+        #     yield 'break;'
+        #     yield IndentedLine(relative_indent=-1, line='')
+        # yield IndentedLine(relative_indent=-1, line='}')
+        # yield -1
+        # yield '}'
         yield 'return NULL;'
         yield IndentedLine(relative_indent=-1, line='}')
 

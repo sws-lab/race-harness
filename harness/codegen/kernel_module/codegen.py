@@ -1,5 +1,5 @@
 import io
-from typing import Optional, Dict, Iterable
+from typing import Optional, Dict, Iterable, Tuple, List
 from harness.core import ProcessSet, Process, ProcessStateInvariant, StateGraphNode
 from harness.codegen.error import HarnessCodegenError
 from harness.codegen.kernel_module.process_template import KernelModuleHarnessProcessTemplate
@@ -12,7 +12,7 @@ class KernelModuleHarnessGenerator:
             process: (None, None)
             for process in self._process_set
         }
-        self._invariants = list()
+        self._invariants: List[ProcessStateInvariant] = list()
 
     @property
     def process_set(self) -> ProcessSet:
@@ -55,34 +55,48 @@ class KernelModuleHarnessGenerator:
         return out.getvalue()
     
     def _generate(self) -> IndentedLineGenerator:
-        for index, _ in enumerate(self._invariants):
-            yield f'static __harness_mutex harness_kernel_module_invariant_{index};'
-        if self._invariants:
-            yield ''
+        process_states = {
+            state: index
+            for process in self._process_set.processes
+            for index, state in enumerate(process.entry_node.all_nodes)
+        }
+        def get_invariants(process: Process, state: StateGraphNode) -> Iterable[Tuple[Process, StateGraphNode]]:
+            for invariant in self._invariants:
+                if invariant.process == process and invariant.state == state:
+                    for invariant_state in invariant.invariant_set:
+                        yield invariant.invariant_process, invariant_state
+                elif invariant.invariant_process == process and state in invariant.invariant_set:
+                    yield invariant.process, invariant.state
 
-        def get_invariants(process: Process, state: StateGraphNode) -> Iterable[str]:
-            for index, invariant in enumerate(self._invariants):
-                if (invariant.process == process and invariant.state == state) or \
-                    invariant.invariant_process == process and state not in invariant:
-                    yield f'harness_kernel_module_invariant_{index}'
+        yield 'static __harness_mutex harness_state_mutex;'
+        yield ''
+
+        for process in self._process_set.processes:
+            yield f'static unsigned long process_{process.mnemonic}_state;'
+        yield ''
 
         for process, (process_template, process_specialization) in self._processes.items():
-            yield from process_template.generate(process, process_specialization, get_invariants)
+            yield from process_template.generate(process, process_specialization, get_invariants, lambda state: process_states[state])
             yield ''
 
         yield 'int main(void) {'
         yield 1
-        for index, _ in enumerate(self._processes.keys()):
-            yield f'__harness_thread process{index};'
-        for index, _ in enumerate(self._invariants):
-            yield f'__harness_mutex_init(&harness_kernel_module_invariant_{index});'
+        
+        yield f'__harness_mutex_init(&harness_state_mutex, NULL);'
+        for process in self._process_set.processes:
+            yield f'process_{process.mnemonic}_state = {process_states[process.entry_node]};'
         yield ''
-        for index, process in enumerate(self._processes.keys()):
-            yield f'__harness_thread_create(&process{index}, NULL, {KernelModuleHarnessProcessTemplate.process_function_name(process)}, NULL);'
+
+        for process in self._process_set.processes:
+            yield f'__harness_thread process_{process.mnemonic};'
         yield ''
-        for index, _ in enumerate(self._processes.keys()):
-            yield f'__harness_thread_join(&process{index}, NULL);'
+
+        for process in self._process_set.processes:
+            yield f'__harness_thread_create(&process_{process.mnemonic}, NULL, {KernelModuleHarnessProcessTemplate.process_function_name(process)}, NULL);'
         yield ''
+        for process in self._process_set.processes:
+            yield f'__harness_thread_join(process_{process.mnemonic}, NULL);'
+        
         yield 'return 0;'
         yield -1
         yield '}'
