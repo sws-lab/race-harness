@@ -1,6 +1,6 @@
 from harness.core import ProcessSet
 from harness.entities import StateGraphSimpleNode, StateGraphSimpleAction, StateGraphSimpleMessage, StateGraphProductNode, StateGraphDerivedNode, StateGraphResponseMessageDestination, StateGraphProductMessage, StateGraphResponseGroupDestination
-from harness.codegen.kernel_module import KernelModuleHarnessGenerator, KernelModuleHarnessProcessTemplate
+from harness.codegen.kernel_module2.codegen import KernelModuleHarnessGenerator
 
 NUM_OF_CLIENTS = 2
 
@@ -95,37 +95,81 @@ invariants = list()
 for state in tty_client_nodriver_state.all_nodes:
     for client in tty_clients:
         invariants.append(state_space.derive_invariant(process=client, state=state, invariant_process=tty_driver))
-        for other_client in tty_clients:
-            if client != other_client:
-                invariants.append(state_space.derive_invariant(process=client, state=state, invariant_process=other_client))
 for state in tty_driver_unloaded_state.all_nodes:
     for client in tty_clients:
         invariants.append(state_space.derive_invariant(process=tty_driver, state=state, invariant_process=client))
 
 # Now let's prepare templates for processes
-tty_driver_template = KernelModuleHarnessProcessTemplate(tty_driver.entry_node)
-tty_driver_template.define_action(tty_driver_load_action, 'init_module();')
-tty_driver_template.define_action(tty_driver_unload_action, 'cleanup_module();')
+# tty_driver_template = KernelModuleHarnessProcessTemplate(tty_driver.entry_node)
+# tty_driver_template.define_action(tty_driver_load_action, 'init_module();')
+# tty_driver_template.define_action(tty_driver_unload_action, 'cleanup_module();')
 
-tty_client_template = KernelModuleHarnessProcessTemplate(tty_client_nodriver_state)
-tty_client_template.set_initializer('''
-struct tty_struct tty;
-struct file file;
-const char content[] = "%client_buffer%";
-''')
-tty_client_template.define_action(tty_client_acquire_connection_action, 'registered_tty_driver->ops->open(&tty, &file);')
-tty_client_template.define_action(tty_client_disconnect_action, 'registered_tty_driver->ops->close(&tty, &file);')
-tty_client_template.define_action(tty_client_use_connection_action, 'registered_tty_driver->ops->write(&tty, content, sizeof(content));')
+# tty_client_template = KernelModuleHarnessProcessTemplate(tty_client_nodriver_state)
+# tty_client_template.set_initializer('''
+# struct tty_struct tty;
+# struct file file;
+# const char content[] = "%client_buffer%";
+# ''')
+# tty_client_template.define_action(tty_client_acquire_connection_action, 'registered_tty_driver->ops->open(&tty, &file);')
+# tty_client_template.define_action(tty_client_disconnect_action, 'registered_tty_driver->ops->close(&tty, &file);')
+# tty_client_template.define_action(tty_client_use_connection_action, 'registered_tty_driver->ops->write(&tty, content, sizeof(content));')
 
 # And generate the code
 codegen = KernelModuleHarnessGenerator(processes)
-codegen.set_process_template(tty_driver, tty_driver_template)
-for client in tty_clients:
-    codegen.set_process_template(client, tty_client_template, {
-        'client_buffer': client.mnemonic
-    })
+# codegen.set_process_template(tty_driver, tty_driver_template)
+# for client in tty_clients:
+#     codegen.set_process_template(client, tty_client_template, {
+#         'client_buffer': client.mnemonic
+#     })
+# codegen.define_action(tty_driver_load_action, '''
+# // init_module();
+# static struct S1 s1;
+# s1.connections = 0;
+# s1.value = 0;
+# s1_ptr = &s1;
+# ''')
+# codegen.define_action(tty_driver_unloaded_action, '''
+# // cleanup_module();
+# s1_ptr = NULL;
+# ''')
+codegen.define_action(tty_driver_load_action, '''
+init_module();
+''')
+codegen.define_action(tty_driver_unloaded_action, '''
+cleanup_module();
+''')
+codegen.define_action(tty_client_acquire_connection_action, 'registered_tty_driver->ops->open(&tty, &file);')
+codegen.define_action(tty_client_disconnect_action, 'registered_tty_driver->ops->close(&tty, &file);')
+codegen.define_action(tty_client_use_connection_action, 'registered_tty_driver->ops->write(&tty, content, sizeof(content));')
+# codegen.define_action(tty_client_acquire_connection_action, 'printf("ACQUIRE %d\\n", ++s1_ptr->connections);')
+# codegen.define_action(tty_client_disconnect_action, 'printf("RELEASE %d\\n", --s1_ptr->connections);')
+# codegen.define_action(tty_client_use_connection_action, 'printf("USE %d\\n", ++s1_ptr->value);')
 for invariant in invariants:
     codegen.add_invariant(invariant)
+
+# print('''
+# #include <stdlib.h>
+# #include <stdio.h>
+# #include <pthread.h>
+
+# #define __harness_mutex pthread_mutex_t
+# #define __harness_thread pthread_t
+# #define __harness_thread_create pthread_create
+# #define __harness_thread_join pthread_join
+# #define __harness_mutex_init pthread_mutex_init
+# #define __harness_mutex_lock pthread_mutex_lock
+# #define __harness_mutex_unlock pthread_mutex_unlock
+# #define __harness_random rand()
+# #define __goblint_split_begin(x)
+# #define __goblint_split_end(x)
+
+# struct S1 {
+#   _Atomic int connections;
+#   _Atomic int value;
+# };
+# static struct S1 * _Atomic s1_ptr;
+      
+# ''')
 
 print('''
 #include "linux/compiler_types.h"
@@ -147,9 +191,14 @@ void __harness_thread_join(__harness_thread, void *);
 void __harness_mutex_init(__harness_mutex *, void *);
 void __harness_mutex_lock(__harness_mutex *);
 void __harness_mutex_unlock(__harness_mutex *);
-extern volatile long __harness_random;
-
+// extern volatile long __harness_random;
+extern int __VERIFIER_nondet_int();
+#define __harness_random __VERIFIER_nondet_int()
+      
 extern struct tty_driver *registered_tty_driver;
+struct tty_struct tty;
+struct file file;
+const char content[] = "%client_buffer%";
       
 ''')
 print(codegen.generate())
