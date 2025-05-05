@@ -10,6 +10,12 @@ class ProcessMailboxEntry:
 
     def __hash__(self) -> int:
         return hash(self.origin) * 11 + hash(self.message)
+    
+    def __eq__(self, value):
+        return isinstance(value, ProcessMailboxEntry) and value.origin == self.origin and value.message == self.message
+    
+    def __ne__(self, value):
+        return not self.__eq__(value)
 
 @dataclasses.dataclass
 class OutgoingMessageBatch:
@@ -37,6 +43,10 @@ class ProcessState:
     @property
     def is_mailbox_empty(self) -> bool:
         return len(self._mailbox) == 0
+    
+    @property
+    def with_empty_mailbox(self) -> 'ProcessState':
+        return ProcessState(process=self.process, state=self.state, mailbox=())
 
     def push_message(self, origin: StateGraphMessageParticipant, message: StateGraphMessage) -> 'ProcessState':
         mapped_message = self.process.map_message(origin, message)
@@ -50,10 +60,12 @@ class ProcessState:
     def next_states(self) -> Iterable[Tuple['ProcessState', OutgoingMessageBatch]]:
         has_triggerred_states = False
         if self._mailbox:
-            trigger = self._mailbox[0]
-            for state in self._next_triggered_states(trigger, self._mailbox[1:]):
-                has_triggerred_states = True
-                yield state
+            for trigger in self._mailbox:
+                new_mailbox = self._mailbox.copy()
+                new_mailbox.remove(trigger)
+                for state in self._next_triggered_states(trigger, new_mailbox):
+                    has_triggerred_states = True
+                    yield state
         if not has_triggerred_states:
             yield from self._next_untrigerred_states()
 

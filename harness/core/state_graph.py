@@ -122,20 +122,6 @@ class StateGraphNode(abc.ABC):
     @abc.abstractmethod
     def edges(self) -> Iterable[StateGraphEdge]: pass
 
-    def reachable_nodes(self, *, include_self: bool = False) -> Iterable['StateGraphNode']:
-        visited = set()
-        pending = [*self.edges]
-        while len(pending) > 0:
-            edge = pending.pop()
-            if edge.target not in visited:
-                yield edge
-                visited.add(edge.target)
-                for edge in edge.target.edges:
-                    pending.append(edge)
-        if include_self:
-            yield self
-            visited.add(self)
-
     @property
     def all_nodes(self) -> Iterable['StateGraphNode']:
         visited = set()

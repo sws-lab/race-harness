@@ -1,4 +1,5 @@
 import io
+import functools
 from typing import Iterable, Dict, Tuple, Optional
 from harness.core.process import Process, ProcessState
 from harness.core.state_graph import StateGraphNode
@@ -8,6 +9,7 @@ class ProcessSetState:
     def __init__(self, process_set: 'ProcessSet', state: Dict[Process, ProcessState]):
         self._process_set = process_set
         self._state = state.copy()
+        self._next_states_cache = None
 
     @property
     def process_set(self) -> 'ProcessSet':
@@ -39,14 +41,29 @@ class ProcessSetState:
 
     @property
     def next_states(self) -> Iterable['ProcessSetState']:
-        has_nonempty_mailbox = False
-        for process, process_state in self.process_states:
-            if not process_state.is_mailbox_empty:
-                has_nonempty_mailbox = True
-                yield from self._next_states_for(process)
-        if not has_nonempty_mailbox:
-            for process in self.processes:
-                yield from self._next_states_for(process)
+        if self._next_states_cache is None:
+            self._next_states_cache = list(self._next_states)
+        yield from self._next_states_cache
+
+    @property
+    def with_empty_mailboxes(self) -> 'ProcessSetState':
+        return ProcessSetState(
+            process_set=self.process_set,
+            state={
+                process: state.with_empty_mailbox
+                for process, state in self._state.items()
+            }
+        )
+
+    @property
+    def _next_states(self) -> Iterable['ProcessSetState']:
+        active_communications = set(
+            (entry.origin, receiver)
+            for receiver, receiver_state in self.process_states
+            for entry in receiver_state.mailbox
+        )
+        for process in self.processes:
+            yield from self._next_states_for(process, lambda receiver: (process, receiver) in active_communications)
 
     @property
     def state_space(self) -> 'ProcessSetStateSpace':
@@ -55,21 +72,26 @@ class ProcessSetState:
             states=self.reachable_states(include_self=True)
         )
 
-    def _next_states_for(self, process: Process) -> Iterable['ProcessSetState']:
+    def _next_states_for(self, process: Process, has_active_comms_with) -> Iterable['ProcessSetState']:
         for next_process_state, outgoing_messages in self._state[process].next_states:
             new_state = {
                 other_process: other_state if other_process != process else next_process_state
                 for other_process, other_state in self.process_states
             }
+            blocks_on_messaging = False
             for envelope in outgoing_messages.envelopes:
                 matching_destinations = (other_process for other_process in self.processes if envelope.destination.matches(destination=other_process, in_response_to=outgoing_messages.trigger.origin if outgoing_messages.trigger is not None else None))
                 has_destinations = False
                 for other_process in matching_destinations:
+                    if has_active_comms_with(other_process):
+                        blocks_on_messaging = True
+                        break
                     has_destinations = True
                     new_state[other_process] = new_state[other_process].push_message(origin=process, message=envelope.message)
-                if not has_destinations:
+                if not has_destinations and not blocks_on_messaging:
                     raise HarnessError(f'Message {envelope.message} for {envelope.destination} from {process} has no matching destinations')
-            yield ProcessSetState(process_set=self.process_set, state=new_state)
+            if not blocks_on_messaging:
+                yield ProcessSetState(process_set=self.process_set, state=new_state)
 
     def __str__(self) -> str:
         out = io.StringIO()
@@ -89,8 +111,8 @@ class ProcessSetState:
     def __eq__(self, value):
         if not isinstance(value, ProcessSetState):
             return False
-        own_processes = set(process for process in self.process_states)
-        other_processes = set(process for process in self.process_states)
+        own_processes = set(process for process, _ in self.process_states)
+        other_processes = set(process for process, _ in self.process_states)
         if own_processes.symmetric_difference(other_processes):
             return False
         for process in own_processes:
@@ -153,6 +175,9 @@ class ProcessSetStateSpace:
     def states(self) -> Iterable[ProcessSetState]:
         yield from self._states.keys()
 
+    def __len__(self) -> int:
+        return len(self._states)
+
     def __contains__(self, value):
         return value in self._states
     
@@ -162,3 +187,12 @@ class ProcessSetStateSpace:
     def derive_invariant(self, process: Process, state: StateGraphNode, invariant_process: Process) -> 'ProcessStateInvariant':
         from harness.core.invariants import ProcessStateInvariant
         return ProcessStateInvariant.derive(psstates=self, process=process, state=state, invariant_process=invariant_process)
+
+    @functools.cached_property
+    def all_invariants(self) -> Iterable['ProcessStateInvariant']:
+        for process1 in self.process_set.processes:
+            for process2 in self.process_set.processes:
+                if process1 == process2:
+                    continue
+                for state in process1.entry_node.all_nodes:
+                    yield self.derive_invariant(process=process1, state=state, invariant_process=process2)
