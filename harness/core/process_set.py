@@ -80,7 +80,7 @@ class ProcessSetState:
             }
             blocks_on_messaging = False
             for envelope in outgoing_messages.envelopes:
-                matching_destinations = (other_process for other_process in self.processes if envelope.destination.matches(destination=other_process, in_response_to=outgoing_messages.trigger.origin if outgoing_messages.trigger is not None else None))
+                matching_destinations = (other_process for other_process in self.processes if envelope.destination.matches(destination=other_process))
                 has_destinations = False
                 for other_process in matching_destinations:
                     if has_active_comms_with(other_process):

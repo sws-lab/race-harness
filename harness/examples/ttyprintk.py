@@ -1,8 +1,9 @@
-from harness.core import ProcessSet
-from harness.entities import StateGraphSimpleNode, StateGraphSimpleAction, StateGraphSimpleMessage, StateGraphProductNode, StateGraphDerivedNode, StateGraphResponseMessageDestination, StateGraphProductMessage, StateGraphResponseGroupDestination
-from harness.codegen.kernel_module2.codegen import KernelModuleHarnessGenerator
+from typing import Dict, List, Tuple, Optional
+from harness.core import ProcessSet, StateGraphNode,StateGraphMessage, Process, StateGraphEdge
+from harness.entities import StateGraphSimpleNode, StateGraphSimpleAction, StateGraphSimpleMessage, StateGraphProductNode, StateGraphDerivedNode, StateGraphProductResponseMessageDestination, StateGraphProductMessage, StateGraphGroupMessageDestination
+from harness.analysis.analysis import ProcessSetAnalyzer
 
-NUM_OF_CLIENTS = 2
+NUM_OF_CLIENTS = 5
 
 # Messages are quite simple. Driver might communicate to the clients that it has been loaded
 # (in reality there is no such communication, but corresponding invariant is simply upheld by the kernel).
@@ -43,24 +44,25 @@ tty_clients = [processes.add_process(mnemonic=f'tty_client{i + 1}', entry_node=t
 tty_driver = processes.add_process(mnemonic='tty_driver', entry_node=tty_driver_unloaded_state)
 
 # Message maps -- this is only needed to map individual client connection/disconnection request to a single compound "loaded" state of the driver.
-tty_driver.add_message_mapping(StateGraphProductMessage.product_message_mapping_from(tty_clients, empty_msg))
+tty_driver.add_inbound_message_mapping(StateGraphProductMessage.product_inbound_message_mapping_from(tty_clients, empty_msg))
+tty_driver.add_outbound_message_mapping(StateGraphProductMessage.product_outbound_message_mapping_to(tty_clients, empty_msg))
 
 # Actions -- actions are used to represent harness C code "payload" attached to state machine transitions + virtual messages to be sent upon transition
 noop_action = StateGraphSimpleAction(mnemonic='noop')
 tty_driver_load_action = StateGraphSimpleAction(mnemonic='tty_driver_load')
 tty_driver_loaded_action = StateGraphSimpleAction(mnemonic='tty_driver_loaded') \
-    .add_envelope(destination=StateGraphResponseGroupDestination(tty_clients), message=tty_driver_loaded_msg)
+    .add_envelope(destination=StateGraphGroupMessageDestination(tty_clients), message=tty_driver_loaded_msg)
 tty_client_request_connection_action = StateGraphSimpleAction(mnemonic='tty_client_request_connection') \
     .add_envelope(destination=tty_driver, message=tty_client_request_connection_msg)
 tty_driver_grant_connection_action = StateGraphSimpleAction(mnemonic='tty_driver_grant_connection') \
-    .add_envelope(destination=StateGraphResponseMessageDestination(), message=tty_driver_grant_connection_msg)
+    .add_envelope(destination=StateGraphProductResponseMessageDestination(), message=tty_driver_grant_connection_msg)
 tty_client_disconnect_action = StateGraphSimpleAction(mnemonic='tty_client_disconnect')
 tty_client_disconnected_action = StateGraphSimpleAction(mnemonic='tty_client_disconnected') \
     .add_envelope(destination=tty_driver, message=tty_client_disconnect_msg)
 tty_client_acquire_connection_action = StateGraphSimpleAction(mnemonic='tty_client_acquire_connection')
 tty_client_use_connection_action = StateGraphSimpleAction(mnemonic='tty_client_use_connection')
 tty_driver_unload_action = StateGraphSimpleAction(mnemonic='tty_driver_unload') \
-    .add_envelope(destination=StateGraphResponseGroupDestination(tty_clients), message=tty_driver_unloading_msg)
+    .add_envelope(destination=StateGraphGroupMessageDestination(tty_clients), message=tty_driver_unloading_msg)
 tty_driver_unloaded_action = StateGraphSimpleAction(mnemonic='tty_driver_unloaded')
 
 # Now, the actual state machine for the client
@@ -76,6 +78,7 @@ tty_client_connected_state.add_edge(trigger=None, target=tty_client_connected_st
 tty_client_connected_state.add_edge(trigger=None, target=tty_client_disconnecting_state, action=tty_client_disconnect_action)
 tty_client_disconnecting_state.add_edge(trigger=None, target=tty_client_disconnecting_state, action=noop_action)
 tty_client_disconnecting_state.add_edge(trigger=None, target=tty_client_disconnected_state, action=tty_client_disconnected_action)
+tty_client_disconnecting_state.add_edge(trigger=tty_driver_unloading_msg, target=tty_client_nodriver_state, action=noop_action)
 
 # And for the driver
 tty_driver_unloaded_state.add_edge(trigger=None, target=tty_driver_unloaded_state, action=noop_action)
@@ -89,116 +92,5 @@ tty_driver_loaded_state.add_edge(match_base=tty_driver_all_clients_inactive_subs
 tty_driver_unloading_state.add_edge(trigger=None, target=tty_driver_unloading_state, action=noop_action)
 tty_driver_unloading_state.add_edge(trigger=None, target=tty_driver_unloaded_state, action=tty_driver_unloaded_action)
 
-# Obtain complete state space for the system and derive some invariants
-state_space = processes.state_space
-invariants = list()
-for state in tty_client_nodriver_state.all_nodes:
-    for client in tty_clients:
-        invariants.append(state_space.derive_invariant(process=client, state=state, invariant_process=tty_driver))
-for state in tty_driver_unloaded_state.all_nodes:
-    for client in tty_clients:
-        invariants.append(state_space.derive_invariant(process=tty_driver, state=state, invariant_process=client))
-
-# Now let's prepare templates for processes
-# tty_driver_template = KernelModuleHarnessProcessTemplate(tty_driver.entry_node)
-# tty_driver_template.define_action(tty_driver_load_action, 'init_module();')
-# tty_driver_template.define_action(tty_driver_unload_action, 'cleanup_module();')
-
-# tty_client_template = KernelModuleHarnessProcessTemplate(tty_client_nodriver_state)
-# tty_client_template.set_initializer('''
-# struct tty_struct tty;
-# struct file file;
-# const char content[] = "%client_buffer%";
-# ''')
-# tty_client_template.define_action(tty_client_acquire_connection_action, 'registered_tty_driver->ops->open(&tty, &file);')
-# tty_client_template.define_action(tty_client_disconnect_action, 'registered_tty_driver->ops->close(&tty, &file);')
-# tty_client_template.define_action(tty_client_use_connection_action, 'registered_tty_driver->ops->write(&tty, content, sizeof(content));')
-
-# And generate the code
-codegen = KernelModuleHarnessGenerator(processes)
-# codegen.set_process_template(tty_driver, tty_driver_template)
-# for client in tty_clients:
-#     codegen.set_process_template(client, tty_client_template, {
-#         'client_buffer': client.mnemonic
-#     })
-# codegen.define_action(tty_driver_load_action, '''
-# // init_module();
-# static struct S1 s1;
-# s1.connections = 0;
-# s1.value = 0;
-# s1_ptr = &s1;
-# ''')
-# codegen.define_action(tty_driver_unloaded_action, '''
-# // cleanup_module();
-# s1_ptr = NULL;
-# ''')
-codegen.define_action(tty_driver_load_action, '''
-init_module();
-''')
-codegen.define_action(tty_driver_unloaded_action, '''
-cleanup_module();
-''')
-codegen.define_action(tty_client_acquire_connection_action, 'registered_tty_driver->ops->open(&tty, &file);')
-codegen.define_action(tty_client_disconnect_action, 'registered_tty_driver->ops->close(&tty, &file);')
-codegen.define_action(tty_client_use_connection_action, 'registered_tty_driver->ops->write(&tty, content, sizeof(content));')
-# codegen.define_action(tty_client_acquire_connection_action, 'printf("ACQUIRE %d\\n", ++s1_ptr->connections);')
-# codegen.define_action(tty_client_disconnect_action, 'printf("RELEASE %d\\n", --s1_ptr->connections);')
-# codegen.define_action(tty_client_use_connection_action, 'printf("USE %d\\n", ++s1_ptr->value);')
-for invariant in invariants:
-    codegen.add_invariant(invariant)
-
-# print('''
-# #include <stdlib.h>
-# #include <stdio.h>
-# #include <pthread.h>
-
-# #define __harness_mutex pthread_mutex_t
-# #define __harness_thread pthread_t
-# #define __harness_thread_create pthread_create
-# #define __harness_thread_join pthread_join
-# #define __harness_mutex_init pthread_mutex_init
-# #define __harness_mutex_lock pthread_mutex_lock
-# #define __harness_mutex_unlock pthread_mutex_unlock
-# #define __harness_random rand()
-# #define __goblint_split_begin(x)
-# #define __goblint_split_end(x)
-
-# struct S1 {
-#   _Atomic int connections;
-#   _Atomic int value;
-# };
-# static struct S1 * _Atomic s1_ptr;
-      
-# ''')
-
-print('''
-#include "linux/compiler_types.h"
-#include "linux/kconfig.h"
-#include "asm/orc_header.h"
-#include "linux/build-salt.h"
-#include "linux/console.h"
-#include "linux/device.h"
-#include "linux/elfnote-lto.h"
-#include "linux/export-internal.h"
-#include "linux/module.h"
-#include "linux/serial.h"
-#include "linux/tty.h"
-
-typedef long __harness_mutex;
-typedef long __harness_thread;
-void __harness_thread_create(__harness_thread *, void *, void *(*)(void *), void *);
-void __harness_thread_join(__harness_thread, void *);
-void __harness_mutex_init(__harness_mutex *, void *);
-void __harness_mutex_lock(__harness_mutex *);
-void __harness_mutex_unlock(__harness_mutex *);
-// extern volatile long __harness_random;
-extern int __VERIFIER_nondet_int();
-#define __harness_random __VERIFIER_nondet_int()
-      
-extern struct tty_driver *registered_tty_driver;
-struct tty_struct tty;
-struct file file;
-const char content[] = "%client_buffer%";
-      
-''')
-print(codegen.generate())
+analysis = ProcessSetAnalyzer(processes)
+print(analysis.infer_concurrent_space(tty_clients[0], tty_client_nodriver_state))

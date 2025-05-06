@@ -1,5 +1,6 @@
 from typing import Iterable, List, Optional
-from harness.core import StateGraphMessage, Process, StateGraphMessageParticipant
+from harness.core import StateGraphMessage, Process, StateGraphMessageParticipant, StateGraphEdge, StateGraphMessageEnvelope
+from harness.entities.message_destinations import StateGraphProductResponseMessageDestination
 
 class StateGraphSimpleMessage(StateGraphMessage):
     def __init__(self, mnemonic: str):
@@ -53,7 +54,7 @@ class StateGraphProductMessage(StateGraphMessage):
         return res
 
     @staticmethod
-    def product_message_mapping_from(senders: List['Process'], empty_message: StateGraphMessage):
+    def product_inbound_message_mapping_from(senders: List['Process'], empty_message: StateGraphMessage):
         def construct_product_message(index: int, message: StateGraphProductMessage):
             submessages = list()
             for i in range(len(senders)):
@@ -66,5 +67,26 @@ class StateGraphProductMessage(StateGraphMessage):
             for index, sender in enumerate(senders):
                 if sender == source:
                     return construct_product_message(index, message)
+            return None
+        return mapping
+
+    @staticmethod
+    def product_outbound_message_mapping_to(receivers: List['Process'], empty_message: StateGraphMessage):
+        def mapping(edge: StateGraphEdge, envelope: StateGraphMessageEnvelope):
+            if not isinstance(envelope.destination, StateGraphProductResponseMessageDestination):
+                return None
+            
+            if edge.trigger is None:
+                return None
+            
+            if not isinstance(edge.trigger, StateGraphProductMessage):
+                return None
+            
+            for receiver, submsg in zip(receivers, edge.trigger.submessages, strict=True):
+                if submsg != empty_message:
+                    return StateGraphMessageEnvelope(
+                        destination=receiver,
+                        message=envelope.message
+                    )
             return None
         return mapping

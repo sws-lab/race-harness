@@ -49,7 +49,7 @@ class ProcessState:
         return ProcessState(process=self.process, state=self.state, mailbox=())
 
     def push_message(self, origin: StateGraphMessageParticipant, message: StateGraphMessage) -> 'ProcessState':
-        mapped_message = self.process.map_message(origin, message)
+        mapped_message = self.process.map_inbound_message(origin, message)
         return ProcessState(
             process=self.process,
             state=self.state,
@@ -87,7 +87,10 @@ class ProcessState:
 
     def _next_states_from_edges(self, edges: Iterable[StateGraphEdge], mailbox: Iterable[ProcessMailboxEntry], trigger: Optional[ProcessMailboxEntry]) -> Iterable[Tuple['ProcessState', OutgoingMessageBatch]]:                
         for edge in edges:
-            yield ProcessState(process=self.process, state=edge.target, mailbox=mailbox), OutgoingMessageBatch(trigger=trigger, envelopes=edge.action.message_envelopes)
+            yield ProcessState(process=self.process, state=edge.target, mailbox=mailbox), OutgoingMessageBatch(trigger=trigger, envelopes=[
+                self.process.map_outbound_message(edge, envelope)
+                for envelope in edge.action.message_envelopes
+            ])
     
     def __str__(self) -> str:
         out = io.StringIO()
@@ -133,13 +136,14 @@ class Process(StateGraphMessageParticipant, StateGraphMessageDestination):
         super().__init__()
         self._mnemonic = mnemonic
         self._entry_node = entry_node
-        self._message_mappers = list()
+        self._inbound_mappers = list()
+        self._outbound_mappers = list()
 
     @property
     def mnemonic(self) -> str:
         return self._mnemonic
     
-    def matches(self, destination: StateGraphMessageParticipant, in_response_to: Optional[StateGraphMessageParticipant]):
+    def matches(self, destination: StateGraphMessageParticipant):
         return self == destination
     
     @property
@@ -150,15 +154,25 @@ class Process(StateGraphMessageParticipant, StateGraphMessageDestination):
     def initial_state(self) -> ProcessState:
         return ProcessState(process=self, state=self.entry_node, mailbox=())
     
-    def add_message_mapping(self, mapping: Callable[[StateGraphMessageParticipant, StateGraphMessage], StateGraphMessage]):
-        self._message_mappers.append(mapping)
+    def add_inbound_message_mapping(self, mapping: Callable[[StateGraphMessageParticipant, StateGraphMessage], Optional[StateGraphMessage]]):
+        self._inbound_mappers.append(mapping)
 
-    def map_message(self, source: StateGraphMessageParticipant, message: StateGraphMessage) -> StateGraphMessage:
-        for mapping in self._message_mappers:
+    def add_outbound_message_mapping(self, mapping: Callable[[StateGraphEdge, StateGraphMessageEnvelope], Optional[StateGraphMessageEnvelope]]):
+        self._outbound_mappers.append(mapping)
+
+    def map_inbound_message(self, source: StateGraphMessageParticipant, message: StateGraphMessage) -> StateGraphMessage:
+        for mapping in self._inbound_mappers:
             mapped_msg = mapping(source, message)
             if mapped_msg is not None:
                 return mapped_msg
         return message
+    
+    def map_outbound_message(self, edge: StateGraphEdge, envelope: StateGraphMessageEnvelope) -> StateGraphMessageEnvelope:
+        for mapping in self._outbound_mappers:
+            mapped_envelope = mapping(edge, envelope)
+            if mapped_envelope is not None:
+                return mapped_envelope
+        return envelope
     
     def __str__(self) -> str:
         return self.mnemonic

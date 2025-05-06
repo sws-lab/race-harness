@@ -10,6 +10,9 @@ class StateGraphMessage(abc.ABC):
     def __str__(self):
         return self.mnemonic
     
+    def __repr__(self):
+        return str(self)
+    
     @abc.abstractmethod
     def __eq__(self, value): pass
     
@@ -38,7 +41,7 @@ class StateGraphMessageDestination(abc.ABC):
     @abc.abstractmethod
     def mnemonic(self) -> str: pass
 
-    def matches(self, destination: StateGraphMessageParticipant, in_response_to: Optional[StateGraphMessageParticipant]) -> bool:  pass
+    def matches(self, destination: StateGraphMessageParticipant) -> bool:  pass
 
     def __str__(self):
         return self.mnemonic

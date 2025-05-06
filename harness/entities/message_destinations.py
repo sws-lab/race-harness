@@ -1,19 +1,8 @@
-from typing import Iterable, Optional
-from harness.core import StateGraphMessageDestination, StateGraphMessageParticipant
-
-class StateGraphResponseMessageDestination(StateGraphMessageDestination):
-    def __init__(self):
-        super().__init__()
+from typing import Iterable, Optional, Callable
+from harness.core import StateGraphMessageDestination, StateGraphMessageParticipant, HarnessError
     
-    @property
-    def mnemonic(self) -> str:
-        return '%RESPONSE%'
-    
-    def matches(self, destination: StateGraphMessageParticipant, in_response_to: Optional[StateGraphMessageParticipant]) -> bool:
-        return destination == in_response_to
-    
-class StateGraphResponseGroupDestination(StateGraphMessageDestination):
-    def __init__(self, recipients: Iterable[StateGraphResponseMessageDestination]):
+class StateGraphGroupMessageDestination(StateGraphMessageDestination):
+    def __init__(self, recipients: Iterable[StateGraphMessageDestination]):
         super().__init__()
         self._recipients = list(recipients)
     
@@ -24,5 +13,16 @@ class StateGraphResponseGroupDestination(StateGraphMessageDestination):
             for recipient in self._recipients
         ))
     
-    def matches(self, destination: StateGraphMessageParticipant, in_response_to: Optional[StateGraphMessageParticipant]) -> bool:
-        return any(recipient.matches(destination, in_response_to) for recipient in self._recipients)
+    def matches(self, destination: StateGraphMessageParticipant) -> bool:
+        return any(recipient.matches(destination) for recipient in self._recipients)
+
+class StateGraphProductResponseMessageDestination(StateGraphMessageDestination):
+    def __init__(self):
+        super().__init__()
+    
+    @property
+    def mnemonic(self) -> str:
+        return '%PRODUCT_RESPONSE%'
+    
+    def matches(self, destination: StateGraphMessageParticipant) -> bool:
+        raise HarnessError(f'{self.__class__}.matches method cannot be called directly')
