@@ -138,6 +138,7 @@ class Process(StateGraphMessageParticipant, StateGraphMessageDestination):
         self._entry_node = entry_node
         self._inbound_mappers = list()
         self._outbound_mappers = list()
+        self._hash = hash(mnemonic)
 
     @property
     def mnemonic(self) -> str:
@@ -184,4 +185,4 @@ class Process(StateGraphMessageParticipant, StateGraphMessageDestination):
         return not self.__eq__(value)
     
     def __hash__(self) -> int:
-        return hash(self.mnemonic)
+        return self._hash

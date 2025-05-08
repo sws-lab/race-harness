@@ -79,7 +79,7 @@ class StateGraphAction(abc.ABC):
     def __hash__(self):
         return hash(self.mnemonic)
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass
 class StateGraphEdge:
     source: 'StateGraphNode'
     target: 'StateGraphNode'
@@ -105,7 +105,9 @@ class StateGraphEdge:
         return not self.__eq__(value)
     
     def __hash__(self):
-        return hash(self.source) * 31 + hash(self.target) * 17 + hash(self.trigger)
+        if not hasattr(self, '_cache_hash'):
+            setattr(self, '_cache_hash', hash(self.source) * 31 + hash(self.target) * 17 + hash(self.trigger))
+        return self._cache_hash
 
 class StateGraphNode(abc.ABC):
     def __init__(self, mnemonic: str, is_placeholder: bool = False):
