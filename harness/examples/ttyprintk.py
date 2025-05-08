@@ -1,7 +1,5 @@
-from typing import Dict, List, Tuple, Optional
-from harness.core import ProcessSet, StateGraphNode,StateGraphMessage, Process, StateGraphEdge
+from harness.core import ProcessSet
 from harness.entities import StateGraphSimpleNode, StateGraphSimpleAction, StateGraphSimpleMessage, StateGraphProductNode, StateGraphDerivedNode, StateGraphProductResponseMessageDestination, StateGraphProductMessage, StateGraphGroupMessageDestination
-from harness.analysis.analysis import ProcessSetAnalyzer
 
 NUM_OF_CLIENTS = 5
 
@@ -92,33 +90,5 @@ tty_driver_loaded_state.add_edge(match_base=tty_driver_all_clients_inactive_subs
 tty_driver_unloading_state.add_edge(trigger=None, target=tty_driver_unloading_state, action=noop_action)
 tty_driver_unloading_state.add_edge(trigger=None, target=tty_driver_unloaded_state, action=tty_driver_unloaded_action)
 
-import time
-
-begin = time.time()
 state_space = processes.state_space
-end1 = time.time()
-
-analysis = ProcessSetAnalyzer(processes)
-
-for process in processes.processes:
-    for state in process.entry_node.all_nodes:
-        psstates = set(pss for pss in state_space.states if pss.process_state(process).state == state)
-        partial_space = analysis.infer_concurrent_space(process, state)
-        for pss in psstates:
-            for other_process in processes.processes:
-                if pss.process_state(other_process).state not in partial_space[other_process]:
-                    print(process, state, other_process, pss.process_state(other_process).state, partial_space[other_process])
-                    raise 'REEE'
-end2 = time.time()
-
-concurrent_space = analysis.infer_concurrent_space(tty_clients[0], tty_client_nodriver_state)
-end3 = time.time()
-
-for process, states in concurrent_space.items():
-    print(f'{process} ({len(states)}):')
-    for state in states:
-        print(f'\t{state}')
-
-print('State space contruction:', end1 - begin)
-print('Concurrent space verification:', end2 - end1)
-print('Example:', end3 - end2)
+print(len(state_space))
