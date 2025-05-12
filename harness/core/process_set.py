@@ -1,5 +1,4 @@
 import io
-import functools
 from typing import Iterable, Dict, Tuple, Optional
 from harness.core.process import Process, ProcessState, StateGraphEdge
 from harness.core.state_graph import StateGraphNode
@@ -193,16 +192,3 @@ class ProcessSetStateSpace:
         for psstate in self._states.keys():
             if psstate.process_state(process).state == state:
                 yield psstate
-    
-    def derive_invariant(self, process: Process, state: StateGraphNode, invariant_process: Process) -> 'ProcessStateInvariant':
-        from harness.core.invariants import ProcessStateInvariant
-        return ProcessStateInvariant.derive(psstates=self, process=process, state=state, invariant_process=invariant_process)
-
-    @functools.cached_property
-    def all_invariants(self) -> Iterable['ProcessStateInvariant']:
-        for process1 in self.process_set.processes:
-            for process2 in self.process_set.processes:
-                if process1 == process2:
-                    continue
-                for state in process1.entry_node.all_nodes:
-                    yield self.derive_invariant(process=process1, state=state, invariant_process=process2)

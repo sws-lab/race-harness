@@ -1,4 +1,4 @@
-from typing import Iterable, Tuple, Callable, Collection, Set, Optional
+from typing import Iterable, Tuple, Set
 from harness.core.process import Process
 from harness.core.process_set import ProcessSetStateSpace
 from harness.core.state_graph import StateGraphEdge
