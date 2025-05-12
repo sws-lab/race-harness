@@ -91,4 +91,28 @@ tty_driver_unloading_state.add_edge(trigger=None, target=tty_driver_unloading_st
 tty_driver_unloading_state.add_edge(trigger=None, target=tty_driver_unloaded_state, action=tty_driver_unloaded_action)
 
 state_space = processes.state_space
-print(len(state_space))
+
+transition_index = dict()
+for index, (p1, e1, p2, e2) in enumerate(state_space.collect_concurrent_transitions()):
+    if e2 in transition_index.get((p2, e2), dict()).get(p1, ()):
+        continue
+    if (p1, e1) not in transition_index:
+        transition_index[(p1, e1)] = dict()
+    if p2 not in transition_index[(p1, e1)]:
+        transition_index[(p1, e1)][p2] = list()
+    transition_index[(p1, e1)][p2].append(e2)
+
+count = 0
+for (p1, e1), transitions in transition_index.items():
+    if e1.action == noop_action:
+        continue
+    print(p1, e1)
+    for p2, e2s in transitions.items():
+        print('\t', p2)
+        for e2 in e2s:
+            if e2.action == noop_action:
+                continue
+            count += 1
+            print('\t\t', e2)
+print(count)
+

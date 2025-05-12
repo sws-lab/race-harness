@@ -58,36 +58,41 @@ class ProcessState:
     
     @property
     def next_states(self) -> Iterable[Tuple['ProcessState', OutgoingMessageBatch]]:
+        for state, _, batch in self.next_transitions:
+            yield (state, batch)
+    
+    @property
+    def next_transitions(self) -> Iterable[Tuple['ProcessState', StateGraphEdge, OutgoingMessageBatch]]:
         has_triggerred_states = False
         if self._mailbox:
             for trigger in self._mailbox:
                 new_mailbox = self._mailbox.copy()
                 new_mailbox.remove(trigger)
-                for state in self._next_triggered_states(trigger, new_mailbox):
+                for state in self._next_triggered_transitions(trigger, new_mailbox):
                     has_triggerred_states = True
                     yield state
         if not has_triggerred_states:
-            yield from self._next_untrigerred_states()
+            yield from self._next_untrigerred_transitions()
 
-    def _next_triggered_states(self, trigger: ProcessMailboxEntry, mailbox: Iterable[ProcessMailboxEntry]) -> Iterable[Tuple['ProcessState', OutgoingMessageBatch]]:
+    def _next_triggered_transitions(self, trigger: ProcessMailboxEntry, mailbox: Iterable[ProcessMailboxEntry]) -> Iterable[Tuple['ProcessState', StateGraphEdge, OutgoingMessageBatch]]:
         triggered_edges = (
             edge
             for edge in self.state.edges
             if edge.trigger == trigger.message
         )
-        yield from self._next_states_from_edges(triggered_edges, mailbox, trigger)
+        yield from self._next_transitions_from_edges(triggered_edges, mailbox, trigger)
 
-    def _next_untrigerred_states(self) -> Iterable[Tuple['ProcessState', OutgoingMessageBatch]]:
+    def _next_untrigerred_transitions(self) -> Iterable[Tuple['ProcessState', StateGraphEdge, OutgoingMessageBatch]]:
         unconditional_edges = (
             edge
             for edge in self.state.edges
             if edge.trigger is None
         )
-        yield from self._next_states_from_edges(unconditional_edges, self._mailbox, None)
+        yield from self._next_transitions_from_edges(unconditional_edges, self._mailbox, None)
 
-    def _next_states_from_edges(self, edges: Iterable[StateGraphEdge], mailbox: Iterable[ProcessMailboxEntry], trigger: Optional[ProcessMailboxEntry]) -> Iterable[Tuple['ProcessState', OutgoingMessageBatch]]:                
+    def _next_transitions_from_edges(self, edges: Iterable[StateGraphEdge], mailbox: Iterable[ProcessMailboxEntry], trigger: Optional[ProcessMailboxEntry]) -> Iterable[Tuple['ProcessState', StateGraphEdge, OutgoingMessageBatch]]:                
         for edge in edges:
-            yield ProcessState(process=self.process, state=edge.target, mailbox=mailbox), OutgoingMessageBatch(trigger=trigger, envelopes=[
+            yield ProcessState(process=self.process, state=edge.target, mailbox=mailbox), edge, OutgoingMessageBatch(trigger=trigger, envelopes=[
                 self.process.map_outbound_message(edge, envelope)
                 for envelope in edge.action.message_envelopes
             ])

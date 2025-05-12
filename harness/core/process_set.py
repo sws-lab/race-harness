@@ -1,7 +1,7 @@
 import io
 import functools
 from typing import Iterable, Dict, Tuple, Optional
-from harness.core.process import Process, ProcessState
+from harness.core.process import Process, ProcessState, StateGraphEdge
 from harness.core.state_graph import StateGraphNode
 from harness.core.error import HarnessError
 
@@ -9,7 +9,7 @@ class ProcessSetState:
     def __init__(self, process_set: 'ProcessSet', state: Dict[Process, ProcessState]):
         self._process_set = process_set
         self._state = state.copy()
-        self._next_states_cache = None
+        self._next_transitions_cache = None
 
     @property
     def process_set(self) -> 'ProcessSet':
@@ -28,7 +28,7 @@ class ProcessSetState:
 
     def reachable_states(self, *, include_self: bool = False) -> Iterable['ProcessSetState']:
         visited = set()
-        queue = [*self.next_states]
+        queue = list(self.next_states)
         if include_self:
             yield self
             visited.add(self)
@@ -40,10 +40,15 @@ class ProcessSetState:
                 queue.extend(state.next_states)
 
     @property
+    def next_transitions(self) -> Iterable[Tuple[Process, StateGraphEdge, 'ProcessSetState']]:
+        if self._next_transitions_cache is None:
+            self._next_transitions_cache = list(self._next_transitions)
+        yield from self._next_transitions_cache
+
+    @property
     def next_states(self) -> Iterable['ProcessSetState']:
-        if self._next_states_cache is None:
-            self._next_states_cache = list(self._next_states)
-        yield from self._next_states_cache
+        for _, _, state in self.next_transitions:
+            yield state
 
     @property
     def with_empty_mailboxes(self) -> 'ProcessSetState':
@@ -56,14 +61,14 @@ class ProcessSetState:
         )
 
     @property
-    def _next_states(self) -> Iterable['ProcessSetState']:
+    def _next_transitions(self) -> Iterable[Tuple[Process, StateGraphEdge, 'ProcessSetState']]:
         active_communications = set(
             (entry.origin, receiver)
             for receiver, receiver_state in self.process_states
             for entry in receiver_state.mailbox
         )
         for process in self.processes:
-            yield from self._next_states_for(process, lambda receiver: (process, receiver) in active_communications)
+            yield from self._next_transitions_for(process, lambda receiver: (process, receiver) in active_communications)
 
     @property
     def state_space(self) -> 'ProcessSetStateSpace':
@@ -72,8 +77,8 @@ class ProcessSetState:
             states=self.reachable_states(include_self=True)
         )
 
-    def _next_states_for(self, process: Process, has_active_comms_with) -> Iterable['ProcessSetState']:
-        for next_process_state, outgoing_messages in self._state[process].next_states:
+    def _next_transitions_for(self, process: Process, has_active_comms_with) -> Iterable[Tuple[Process, StateGraphEdge, 'ProcessSetState']]:
+        for next_process_state, transition_edge, outgoing_messages in self._state[process].next_transitions:
             new_state = {
                 other_process: other_state if other_process != process else next_process_state
                 for other_process, other_state in self.process_states
@@ -91,7 +96,7 @@ class ProcessSetState:
                 if not has_destinations and not blocks_on_messaging:
                     raise HarnessError(f'Message {envelope.message} for {envelope.destination} from {process} has no matching destinations')
             if not blocks_on_messaging:
-                yield ProcessSetState(process_set=self.process_set, state=new_state)
+                yield process, transition_edge, ProcessSetState(process_set=self.process_set, state=new_state)
 
     def __str__(self) -> str:
         out = io.StringIO()
@@ -183,6 +188,34 @@ class ProcessSetStateSpace:
     
     def __iter__(self) -> Iterable[ProcessSetState]:
         return self.states
+    
+    def match_states(self, process: Process, state: StateGraphNode) -> Iterable[ProcessSetState]:
+        for psstate in self._states.keys():
+            if psstate.process_state(process).state == state:
+                yield psstate
+
+    def collect_concurrent_transitions(self) -> Iterable[Tuple[Process, StateGraphEdge, Process, StateGraphEdge]]:
+        visited = set()
+        for process in self.process_set.processes:
+            for state in process.entry_node.all_nodes:
+                psstates = set(self.match_states(process, state))
+                concurrent_transitions = dict()
+                for psstate in psstates:
+                    for transition_process, transition_edge, _ in psstate.next_transitions:
+                        if transition_process == process:
+                            concurrent_transitions[transition_edge] = self.match_states(process, transition_edge.target)
+                for own_edge, psstates in concurrent_transitions.items():
+                    for psstate in psstates:
+                        for transition_process, transition_edge, _ in psstate.next_transitions:
+                            if transition_process != process:
+                                key = (process, own_edge, transition_process, transition_edge)
+                                reverse_key = (transition_process, transition_edge, process, own_edge)
+                                if key not in visited:
+                                    visited.add(key)
+                                    yield key
+                                if reverse_key not in visited:
+                                    visited.add(reverse_key)
+                                    yield reverse_key
     
     def derive_invariant(self, process: Process, state: StateGraphNode, invariant_process: Process) -> 'ProcessStateInvariant':
         from harness.core.invariants import ProcessStateInvariant
