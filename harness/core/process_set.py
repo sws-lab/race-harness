@@ -193,29 +193,6 @@ class ProcessSetStateSpace:
         for psstate in self._states.keys():
             if psstate.process_state(process).state == state:
                 yield psstate
-
-    def collect_concurrent_transitions(self) -> Iterable[Tuple[Process, StateGraphEdge, Process, StateGraphEdge]]:
-        visited = set()
-        for process in self.process_set.processes:
-            for state in process.entry_node.all_nodes:
-                psstates = set(self.match_states(process, state))
-                concurrent_transitions = dict()
-                for psstate in psstates:
-                    for transition_process, transition_edge, _ in psstate.next_transitions:
-                        if transition_process == process:
-                            concurrent_transitions[transition_edge] = self.match_states(process, transition_edge.target)
-                for own_edge, psstates in concurrent_transitions.items():
-                    for psstate in psstates:
-                        for transition_process, transition_edge, _ in psstate.next_transitions:
-                            if transition_process != process:
-                                key = (process, own_edge, transition_process, transition_edge)
-                                reverse_key = (transition_process, transition_edge, process, own_edge)
-                                if key not in visited:
-                                    visited.add(key)
-                                    yield key
-                                if reverse_key not in visited:
-                                    visited.add(reverse_key)
-                                    yield reverse_key
     
     def derive_invariant(self, process: Process, state: StateGraphNode, invariant_process: Process) -> 'ProcessStateInvariant':
         from harness.core.invariants import ProcessStateInvariant

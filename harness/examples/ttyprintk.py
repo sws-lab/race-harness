@@ -1,7 +1,7 @@
-from harness.core import ProcessSet
+from harness.core import ProcessSet, ProcessConcurrency
 from harness.entities import StateGraphSimpleNode, StateGraphSimpleAction, StateGraphSimpleMessage, StateGraphProductNode, StateGraphDerivedNode, StateGraphProductResponseMessageDestination, StateGraphProductMessage, StateGraphGroupMessageDestination
 
-NUM_OF_CLIENTS = 5
+NUM_OF_CLIENTS = 4
 
 # Messages are quite simple. Driver might communicate to the clients that it has been loaded
 # (in reality there is no such communication, but corresponding invariant is simply upheld by the kernel).
@@ -90,29 +90,35 @@ tty_driver_loaded_state.add_edge(match_base=tty_driver_all_clients_inactive_subs
 tty_driver_unloading_state.add_edge(trigger=None, target=tty_driver_unloading_state, action=noop_action)
 tty_driver_unloading_state.add_edge(trigger=None, target=tty_driver_unloaded_state, action=tty_driver_unloaded_action)
 
+def verify_concurrent_groups(concurrency: ProcessConcurrency):
+    for p1, e1 in concurrency.process_edges:
+        for p2, e2 in concurrency.concurrent_process_edges(p1, e1):
+            # Each concurrent process-edge pair shall belong to some group
+            found_group = False
+            for group in concurrency.concurrent_groups:
+                if (p1, e1) in group and (p2, e2) in group:
+                    found_group = True
+                    break
+            if not found_group:
+                raise 'FAIL!'
+        
+        # Each process-edge shall belong to some group
+        for group in concurrency.concurrent_groups:
+            if (p1, e1) in group:
+                found_group = True
+                break
+        if not found_group:
+            raise 'FAIL!'
+
 state_space = processes.state_space
-
-transition_index = dict()
-for index, (p1, e1, p2, e2) in enumerate(state_space.collect_concurrent_transitions()):
-    if e2 in transition_index.get((p2, e2), dict()).get(p1, ()):
-        continue
-    if (p1, e1) not in transition_index:
-        transition_index[(p1, e1)] = dict()
-    if p2 not in transition_index[(p1, e1)]:
-        transition_index[(p1, e1)][p2] = list()
-    transition_index[(p1, e1)][p2].append(e2)
-
+concurrency = ProcessConcurrency.from_state_space(state_space)
+verify_concurrent_groups(concurrency)
 count = 0
-for (p1, e1), transitions in transition_index.items():
-    if e1.action == noop_action:
+for index, group in enumerate(concurrency.concurrent_groups):
+    if sum(1 for p, e in group if e.action != noop_action) < 2:
         continue
-    print(p1, e1)
-    for p2, e2s in transitions.items():
-        print('\t', p2)
-        for e2 in e2s:
-            if e2.action == noop_action:
-                continue
-            count += 1
-            print('\t\t', e2)
+    for process, edge in group:
+        print(process, edge)
+    print()
+    count += 1
 print(count)
-
