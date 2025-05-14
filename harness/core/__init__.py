@@ -3,3 +3,4 @@ from harness.core.state_graph import *
 from harness.core.process import *
 from harness.core.process_set import *
 from harness.core.concurrency import *
+from harness.core.mutual_exclusion import *

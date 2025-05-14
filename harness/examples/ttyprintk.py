@@ -1,4 +1,4 @@
-from harness.core import ProcessSet, ProcessConcurrency
+from harness.core import ProcessSet, ProcessSetMutualExclusion
 from harness.entities import StateGraphSimpleNode, StateGraphSimpleAction, StateGraphSimpleMessage, StateGraphProductNode, StateGraphDerivedNode, StateGraphProductResponseMessageDestination, StateGraphProductMessage, StateGraphGroupMessageDestination
 
 NUM_OF_CLIENTS = 4
@@ -90,35 +90,11 @@ tty_driver_loaded_state.add_edge(match_base=tty_driver_all_clients_inactive_subs
 tty_driver_unloading_state.add_edge(trigger=None, target=tty_driver_unloading_state, action=noop_action)
 tty_driver_unloading_state.add_edge(trigger=None, target=tty_driver_unloaded_state, action=tty_driver_unloaded_action)
 
-def verify_concurrent_groups(concurrency: ProcessConcurrency):
-    for p1, e1 in concurrency.process_edges:
-        for p2, e2 in concurrency.concurrent_process_edges(p1, e1):
-            # Each concurrent process-edge pair shall belong to some group
-            found_group = False
-            for group in concurrency.concurrent_groups:
-                if (p1, e1) in group and (p2, e2) in group:
-                    found_group = True
-                    break
-            if not found_group:
-                raise 'FAIL!'
-        
-        # Each process-edge shall belong to some group
-        for group in concurrency.concurrent_groups:
-            if (p1, e1) in group:
-                found_group = True
-                break
-        if not found_group:
-            raise 'FAIL!'
-
 state_space = processes.state_space
-concurrency = ProcessConcurrency.from_state_space(state_space)
-verify_concurrent_groups(concurrency)
-count = 0
-for index, group in enumerate(concurrency.concurrent_groups):
-    if sum(1 for p, e in group if e.action != noop_action) < 2:
-        continue
-    for process, edge in group:
-        print(process, edge)
-    print()
-    count += 1
-print(count)
+mutual_exclusion = ProcessSetMutualExclusion(state_space)
+
+for mtx in mutual_exclusion.mutual_exclusion_segments:
+    print('{')
+    for other_process, other_state in mtx:
+        print(f'\t{other_process}: {other_state}')
+    print('}')
