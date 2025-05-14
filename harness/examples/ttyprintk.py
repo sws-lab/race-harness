@@ -1,7 +1,8 @@
 from harness.core import ProcessSet, ProcessSetMutualExclusion
 from harness.entities import StateGraphSimpleNode, StateGraphSimpleAction, StateGraphSimpleMessage, StateGraphProductNode, StateGraphDerivedNode, StateGraphProductResponseMessageDestination, StateGraphProductMessage, StateGraphGroupMessageDestination
+from harness.control_flow import ControlFlowBuilder, ControlFlowFormatter
 
-NUM_OF_CLIENTS = 4
+NUM_OF_CLIENTS = 1
 
 # Messages are quite simple. Driver might communicate to the clients that it has been loaded
 # (in reality there is no such communication, but corresponding invariant is simply upheld by the kernel).
@@ -90,11 +91,16 @@ tty_driver_loaded_state.add_edge(match_base=tty_driver_all_clients_inactive_subs
 tty_driver_unloading_state.add_edge(trigger=None, target=tty_driver_unloading_state, action=noop_action)
 tty_driver_unloading_state.add_edge(trigger=None, target=tty_driver_unloaded_state, action=tty_driver_unloaded_action)
 
-state_space = processes.state_space
-mutual_exclusion = ProcessSetMutualExclusion(state_space)
+formatter = ControlFlowFormatter()
+for process in processes.processes:
+    builder = ControlFlowBuilder(process.entry_node)
+    print(formatter.format(builder.control_flow.canonicalize()))
 
-for mtx in mutual_exclusion.mutual_exclusion_segments:
-    print('{')
-    for other_process, other_state in mtx:
-        print(f'\t{other_process}: {other_state}')
-    print('}')
+# state_space = processes.state_space
+# mutual_exclusion = ProcessSetMutualExclusion(state_space)
+
+# for mtx in mutual_exclusion.mutual_exclusion_segments:
+#     print('{')
+#     for other_process, other_state in mtx:
+#         print(f'\t{other_process}: {other_state}')
+#     print('}')
