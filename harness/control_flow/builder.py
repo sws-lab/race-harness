@@ -1,11 +1,11 @@
 from typing import Iterable
-from harness.core import StateGraphNode, StateGraphEdge
-from harness.control_flow.node import ControlFlowNode, ControlFlowLabel, ControlFlowBranchNode, ControlFlowStatement, ControlFlowSequence, ControlFlowLabelledNode, ControlFlowGotoNode
+from harness.core import StateGraphNode, StateGraphEdge, Process
+from harness.control_flow.node import ControlFlowNode, ControlFlowLabel, ControlFlowBranchNode, ControlFlowStatement, ControlFlowSequence, ControlFlowLabelledNode, ControlFlowGotoNode, ControlFlowLock, ControlFlowUnlock
+from harness.control_flow.mutex import ControlFlowMutexSet
 
 class ControlFlowBuilder:
     def __init__(self, root: StateGraphNode):
         self._root = root
-        self._control_flow_node = None
         self._reverse_edges = dict()
         self._backward_edges = set()
         self._labelled_states = dict()
@@ -15,11 +15,16 @@ class ControlFlowBuilder:
     def state_graph_root(self) -> StateGraphNode:
         return self._root
     
-    @property
-    def control_flow(self) -> ControlFlowNode:
-        if self._control_flow_node is None:
-            self._control_flow_node = self._generate_control_flow_node(self.state_graph_root)
-        return self._control_flow_node
+    def control_flow(self, process: Process, mutex_set: ControlFlowMutexSet) -> ControlFlowNode:
+        node = self._generate_control_flow_node(process, mutex_set, self.state_graph_root)
+        locked_mutexes = list(mutex_set.locked_in_state(process, self.state_graph_root))
+        if locked_mutexes:
+            return ControlFlowSequence([
+                ControlFlowLock(locked_mutexes),
+                node
+            ])
+        else:
+            return node
     
     def _scan(self):
         self._scan_reverse_edges()
@@ -49,22 +54,30 @@ class ControlFlowBuilder:
                 else:
                     queue.append((edge.target, new_path))
 
-    def _generate_control_flow_node(self, state: StateGraphNode) -> ControlFlowNode:        
+    def _generate_control_flow_node(self, process: Process, mutex_set: ControlFlowMutexSet, state: StateGraphNode) -> ControlFlowNode:        
         def generate_edge(edge: StateGraphEdge) -> ControlFlowNode:
             if edge in self._backward_edges:
-                return ControlFlowSequence(
-                    [
-                        ControlFlowStatement(edge),
-                        ControlFlowGotoNode(self._labelled_states[edge.target])
-                    ]
-                )
+                sequence = [
+                    ControlFlowStatement(edge),
+                    ControlFlowGotoNode(self._labelled_states[edge.target])
+                ]
             else:
-                return ControlFlowSequence(
-                    [
-                        ControlFlowStatement(edge),
-                        self._generate_control_flow_node(edge.target)
-                    ]
-                )
+                sequence = [
+                    ControlFlowStatement(edge),
+                    self._generate_control_flow_node(process, mutex_set, edge.target)
+                ]
+            
+            locked_mutexes = set(mutex_set.locked_in_state(process, edge.target))
+            unlocked_mutexes = set(mutex_set.locked_in_state(process, edge.source))
+
+            hold_mutexes = locked_mutexes.intersection(unlocked_mutexes)
+            unlocked_mutexes.difference_update(hold_mutexes)
+            locked_mutexes.difference_update(hold_mutexes)
+            if unlocked_mutexes:
+                sequence.insert(1, ControlFlowUnlock(unlocked_mutexes))
+            if locked_mutexes:
+                sequence.insert(1, ControlFlowLock(locked_mutexes))
+            return ControlFlowSequence(sequence)
         
         edge_nodes = list()
         for edge in state.edges:

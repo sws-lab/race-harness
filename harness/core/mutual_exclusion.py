@@ -18,6 +18,9 @@ class ProcessMutualExclusionSegment:
     def states(self) -> Iterable[Tuple[Process, StateGraphNode]]:
         yield from self._states
 
+    def has(self, process: Process, state: StateGraphNode) -> bool:
+        return (process, state) in self._states
+
     def extend(self, process: Process, state: StateGraphNode) -> 'ProcessMutualExclusionSegment':
         return self.union(((process, state),))
 

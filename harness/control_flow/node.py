@@ -1,6 +1,7 @@
 import abc
 from typing import Iterable, Optional
 from harness.core import Process, StateGraphEdge
+from harness.control_flow.mutex import ControlFlowMutex
 
 class ControlFlowNode(abc.ABC):
     def as_statement(self) -> Optional['ControlFlowStatement']:
@@ -16,6 +17,12 @@ class ControlFlowNode(abc.ABC):
         return None
     
     def as_goto(self) -> Optional['ControlFlowGotoNode']:
+        return None
+    
+    def as_lock(self) -> Optional['ControlFlowLock']:
+        return None
+    
+    def as_unlock(self) -> Optional['ControlFlowUnlock']:
         return None
     
     def canonicalize(self) -> 'ControlFlowNode':
@@ -94,6 +101,30 @@ class ControlFlowBranchNode(ControlFlowNode):
     
     def __bool__(self) -> bool:
         return bool(self._branches)
+    
+class ControlFlowLock(ControlFlowNode):
+    def __init__(self, mutexes: Iterable[ControlFlowMutex]):
+        super().__init__()
+        self._mutexes = list(mutexes)
+
+    @property
+    def mutexes(self) -> Iterable[ControlFlowMutex]:
+        yield from self._mutexes
+
+    def as_lock(self):
+        return self
+    
+class ControlFlowUnlock(ControlFlowNode):
+    def __init__(self, mutexes: Iterable[ControlFlowMutex]):
+        super().__init__()
+        self._mutexes = list(mutexes)
+
+    @property
+    def mutexes(self) -> Iterable[ControlFlowMutex]:
+        yield from self._mutexes
+
+    def as_unlock(self):
+        return self
     
 class ControlFlowLabel:
     def __init__(self, label: str):
