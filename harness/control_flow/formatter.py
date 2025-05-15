@@ -1,6 +1,6 @@
 import io
 from typing import Union, Iterable
-from harness.control_flow.node import ControlFlowNode, ControlFlowStatement, ControlFlowSequence, ControlFlowBranchNode, ControlFlowLabelledNode, ControlFlowGotoNode, ControlFlowLock, ControlFlowUnlock
+from harness.control_flow.node import ControlFlowNode, ControlFlowStatement, ControlFlowSequence, ControlFlowBranchNode, ControlFlowLabelledNode, ControlFlowGotoNode, ControlFlowSynchronization
 
 class ControlFlowFormatter:
     def __init__(self):
@@ -23,16 +23,16 @@ class ControlFlowFormatter:
             yield from self._format_statement(node.as_statement(), *args, **kwargs)
         elif node.as_sequence():
             yield from self._format_sequence(node.as_sequence(), *args, **kwargs)
-        elif node.as_labelled_statement():
-            yield from self._format_labelled_statement(node.as_labelled_statement(), *args, **kwargs)
+        elif node.as_labelled_node():
+            yield from self._format_labelled_statement(node.as_labelled_node(), *args, **kwargs)
         elif node.as_branch():
             yield from self._format_branch(node.as_branch(), *args, **kwargs)
         elif node.as_goto():
             yield from self._format_goto(node.as_goto(), *args, **kwargs)
-        elif node.as_lock():
-            yield from self._format_lock(node.as_lock(), *args, **kwargs)
-        elif node.as_unlock():
-            yield from self._format_unlock(node.as_unlock(), *args, **kwargs)
+        elif node.as_synchronization():
+            yield from self._format_synchronization(node.as_synchronization(), *args, **kwargs)
+        elif node.as_init_barrier():
+            yield 'init_barrier;'
         
     def _format_statement(self, node: ControlFlowStatement) -> Iterable[Union[int, str]]:
         yield f'{node.state_graph_edge.action.mnemonic}; // {node.state_graph_edge}'
@@ -51,12 +51,12 @@ class ControlFlowFormatter:
         node_format = self._format(node.body)
         first = next(node_format, None)
         if first is None:
-            yield f'{node.label.label}:;'
+            yield f'{node.label.node}:;'
             return
         elif isinstance(first, str):
-            yield f'{node.label.label}: {first}'
+            yield f'{node.label.node}: {first}'
         else:
-            yield f'{node.label.label}:'
+            yield f'{node.label.node}:'
             yield first
         yield from node_format
 
@@ -75,20 +75,16 @@ class ControlFlowFormatter:
                 yield '}'
 
     def _format_goto(self, node: ControlFlowGotoNode) -> Iterable[Union[int, str]]:
-        yield f'goto {node.label.label};'
+        yield f'goto {node.label.node};'
 
-    def _format_lock(self, node: ControlFlowLock) -> Iterable[Union[int, str]]:
-        yield 'lock {};'.format(
+    def _format_synchronization(self, node: ControlFlowSynchronization) -> Iterable[Union[int, str]]:
+        yield 'lock {}, unlock {};'.format(
             ', '.join(
                 f'mutex{mtx.identifier}'
-                for mtx in node.mutexes
-            )
-        )
-
-    def _format_unlock(self, node: ControlFlowUnlock) -> Iterable[Union[int, str]]:
-        yield 'unlock {};'.format(
+                for mtx in node.lock
+            ),
             ', '.join(
                 f'mutex{mtx.identifier}'
-                for mtx in node.mutexes
+                for mtx in node.unlock
             )
         )

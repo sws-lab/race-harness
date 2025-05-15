@@ -1,637 +1,327 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <pthread.h>
 
-#define __harness_mutex pthread_mutex_t
-#define __harness_thread pthread_t
-#define __harness_thread_create pthread_create
-#define __harness_thread_join pthread_join
-#define __harness_mutex_init pthread_mutex_init
-#define __harness_mutex_lock pthread_mutex_lock
-#define __harness_mutex_unlock pthread_mutex_unlock
-#define __harness_random rand()
+extern _Atomic int RANDOM;
+
 
 struct S1 {
-  _Atomic int connections;
-  _Atomic int value;
+    _Atomic unsigned int connections;
+    _Atomic unsigned int value; // Remove _Atomic for data race
 };
-static struct S1 *s1_ptr;
-      
+                            
+static struct S1 *s1_ptr = NULL;
 
-static __harness_mutex harness_state_mutex;
 
-static unsigned long process_tty_client1_state;
-static unsigned long process_tty_client2_state;
-static unsigned long process_tty_driver_state;
+static pthread_mutex_t process_set_start_barrier_mtx;
+static unsigned long process_set_start_barrier_epoch;
+static unsigned long process_set_start_barrier_waiting;
+static unsigned long process_set_start_barrier_size;
 
-void *harness_kernel_module_process_tty_client1(void *harness_kernel_module_process_arg) {
-  (void) harness_kernel_module_process_arg; // UNUSED
+
+static void process_set_start_barrier_wait() {
+  pthread_mutex_lock(&process_set_start_barrier_mtx);
+  const unsigned int epoch = process_set_start_barrier_epoch;
+  process_set_start_barrier_waiting++;
+  pthread_mutex_unlock(&process_set_start_barrier_mtx);
+
+  for (int wait = 1; wait;) {
+    pthread_mutex_lock(&process_set_start_barrier_mtx);
+    if (epoch != process_set_start_barrier_epoch) {
+      wait = 0;
+    } else if (process_set_start_barrier_waiting == process_set_start_barrier_size) {
+      process_set_start_barrier_epoch++;
+      process_set_start_barrier_waiting = 0;
+      wait = 0;
+    }
+    pthread_mutex_unlock(&process_set_start_barrier_mtx);
+  }
+}
+
+/* tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive), tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active), tty_client1: tty_client_connected_state, tty_client1: tty_client_disconnecting, tty_driver: tty_driver_unloaded, tty_driver: tty_driver_unloading, tty_driver: tty_driver_loading */
+static pthread_mutex_t mutex0;
+
+/* tty_client2: tty_client_wait_connection, tty_driver: tty_driver_unloaded, tty_driver: tty_driver_unloading, tty_driver: tty_driver_loading */
+static pthread_mutex_t mutex1;
+
+/* tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_active), tty_client2: tty_client_nodriver, tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active) */
+static pthread_mutex_t mutex2;
+
+/* tty_driver: tty_driver_unloaded, tty_driver: tty_driver_unloading, tty_client1: tty_client_wait_connection, tty_driver: tty_driver_loading */
+static pthread_mutex_t mutex3;
+
+/* tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_active), tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive), tty_client1: tty_client_nodriver */
+static pthread_mutex_t mutex4;
+
+/* tty_client2: tty_client_disconnecting, tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive), tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive), tty_driver: tty_driver_unloaded, tty_driver: tty_driver_unloading, tty_driver: tty_driver_loading, tty_client2: tty_client_connected_state */
+static pthread_mutex_t mutex5;
+
+
+void *process_tty_client1(void *arg) {
+  (void) arg; // Unused
   
-  for (;;) {
-    __harness_mutex_lock(&harness_state_mutex);
-    const unsigned long harness_process_state = process_tty_client1_state;
-    int state_transition_permitted;
-    __harness_mutex_unlock(&harness_state_mutex);
-    switch (harness_process_state) {
-      case 0: /* tty_client_nodriver */
-        switch (__harness_random % 2) {
-          case 0: /* tty_client_nodriver */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_driver_state == 0 || process_tty_driver_state == 1 || process_tty_driver_state == 2 || process_tty_driver_state == 6 || process_tty_driver_state == 0 || process_tty_driver_state == 1 || process_tty_driver_state == 2 || process_tty_driver_state == 6) && (process_tty_client2_state == 0 || process_tty_client2_state == 1 || process_tty_client2_state == 0 || process_tty_client2_state == 1)) {
-              state_transition_permitted = 1;
-              process_tty_client1_state = 0;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
+  {
+    pthread_mutex_lock(&mutex4);
+    process_set_start_barrier_wait();
+    label0 /* tty_client_nodriver */: if ((RANDOM % 2) == 0) {
+      /* (tty_client_nodriver -> tty_client_nodriver) */
+      goto label0; /* tty_client_nodriver */
+    } else {
+      pthread_mutex_unlock(&mutex4);
+      /* (tty_client_nodriver -> tty_client_disconnected on tty_driver_loaded) */
+      label1 /* tty_client_disconnected */: if ((RANDOM % 3) == 0) {
+        /* (tty_client_disconnected -> tty_client_disconnected) */
+        goto label1; /* tty_client_disconnected */
+      } else if ((RANDOM % 3) == 0) {
+        pthread_mutex_lock(&mutex3);
+        /* (tty_client_disconnected -> tty_client_wait_connection) */
+        label2 /* tty_client_wait_connection */: if ((RANDOM % 3) == 0) {
+          /* (tty_client_wait_connection -> tty_client_wait_connection) */
+          goto label2; /* tty_client_wait_connection */
+        } else if ((RANDOM % 3) == 0) {
+          pthread_mutex_lock(&mutex0);
+          pthread_mutex_unlock(&mutex3);
+          /* (tty_client_wait_connection -> tty_client_connected_state on tty_driver_grant_connection) */
           
-          case 1: /* tty_client_disconnected */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client2_state == 0 || process_tty_client2_state == 1 || process_tty_client2_state == 0 || process_tty_client2_state == 2 || process_tty_client2_state == 3 || process_tty_client2_state == 4 || process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 3 || process_tty_client2_state == 4) && (process_tty_driver_state == 2 || process_tty_driver_state == 6 || process_tty_driver_state == 3 || process_tty_driver_state == 5 || process_tty_driver_state == 4 || process_tty_driver_state == 2 || process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 5 || process_tty_driver_state == 6)) {
-              state_transition_permitted = 1;
-              process_tty_client1_state = 1;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
+          s1_ptr->connections++;
+          printf("Client 0 connect\n");
           
-        }
-        break;
-      
-      case 1: /* tty_client_disconnected */
-        switch (__harness_random % 3) {
-          case 0: /* tty_client_disconnected */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client2_state == 0 || process_tty_client2_state == 1 || process_tty_client2_state == 0 || process_tty_client2_state == 2 || process_tty_client2_state == 3 || process_tty_client2_state == 4 || process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 3 || process_tty_client2_state == 4) && (process_tty_driver_state == 2 || process_tty_driver_state == 6 || process_tty_driver_state == 3 || process_tty_driver_state == 5 || process_tty_driver_state == 4 || process_tty_driver_state == 2 || process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 5 || process_tty_driver_state == 6)) {
-              state_transition_permitted = 1;
-              process_tty_client1_state = 1;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-          case 1: /* tty_client_wait_connection */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client2_state == 1 || process_tty_client2_state == 4 || process_tty_client2_state == 3 || process_tty_client2_state == 1 || process_tty_client2_state == 3 || process_tty_client2_state == 4) && (process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 2 || process_tty_driver_state == 5 || process_tty_driver_state == 2 || process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 5)) {
-              state_transition_permitted = 1;
-              process_tty_client1_state = 2;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-          case 2: /* tty_client_nodriver */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_driver_state == 0 || process_tty_driver_state == 1 || process_tty_driver_state == 2 || process_tty_driver_state == 6 || process_tty_driver_state == 0 || process_tty_driver_state == 1 || process_tty_driver_state == 2 || process_tty_driver_state == 6) && (process_tty_client2_state == 0 || process_tty_client2_state == 1 || process_tty_client2_state == 0 || process_tty_client2_state == 1)) {
-              state_transition_permitted = 1;
-              process_tty_client1_state = 0;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-        }
-        break;
-      
-      case 2: /* tty_client_wait_connection */
-        switch (__harness_random % 3) {
-          case 0: /* tty_client_wait_connection */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client2_state == 1 || process_tty_client2_state == 4 || process_tty_client2_state == 3 || process_tty_client2_state == 1 || process_tty_client2_state == 3 || process_tty_client2_state == 4) && (process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 2 || process_tty_driver_state == 5 || process_tty_driver_state == 2 || process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 5)) {
-              state_transition_permitted = 1;
-              process_tty_client1_state = 2;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-          case 1: /* tty_client_connected_state */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 4 || process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 3 || process_tty_client2_state == 3 || process_tty_client2_state == 4) && (process_tty_driver_state == 4 || process_tty_driver_state == 5 || process_tty_driver_state == 4 || process_tty_driver_state == 5)) {
-              state_transition_permitted = 1;
-              process_tty_client1_state = 3;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
+          label3 /* tty_client_connected_state */: if ((RANDOM % 2) == 0) {
+            /* (tty_client_connected_state -> tty_client_connected_state) */
             
-            if (state_transition_permitted) {
-              s1_ptr->connections++;
-            }
-            break;
-          
-          case 2: /* tty_client_nodriver */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_driver_state == 0 || process_tty_driver_state == 1 || process_tty_driver_state == 2 || process_tty_driver_state == 6 || process_tty_driver_state == 0 || process_tty_driver_state == 1 || process_tty_driver_state == 2 || process_tty_driver_state == 6) && (process_tty_client2_state == 0 || process_tty_client2_state == 1 || process_tty_client2_state == 0 || process_tty_client2_state == 1)) {
-              state_transition_permitted = 1;
-              process_tty_client1_state = 0;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-        }
-        break;
-      
-      case 3: /* tty_client_connected_state */
-        switch (__harness_random % 2) {
-          case 0: /* tty_client_connected_state */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 4 || process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 3 || process_tty_client2_state == 3 || process_tty_client2_state == 4) && (process_tty_driver_state == 4 || process_tty_driver_state == 5 || process_tty_driver_state == 4 || process_tty_driver_state == 5)) {
-              state_transition_permitted = 1;
-              process_tty_client1_state = 3;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
+            s1_ptr->value++;
+            printf("Client 0 use\n");
             
-            if (state_transition_permitted) {
-              s1_ptr->value++;
-            }
-            break;
-          
-          case 1: /* tty_client_disconnecting */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 3 || process_tty_client2_state == 3 || process_tty_client2_state == 4 || process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 4) && (process_tty_driver_state == 4 || process_tty_driver_state == 5 || process_tty_driver_state == 4 || process_tty_driver_state == 5)) {
-              state_transition_permitted = 1;
-              process_tty_client1_state = 4;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
+            goto label3; /* tty_client_connected_state */
+          } else {
+            /* (tty_client_connected_state -> tty_client_disconnecting) */
             
-            if (state_transition_permitted) {
-              s1_ptr->connections--;
-            }
-            break;
-          
-        }
-        break;
-      
-      case 4: /* tty_client_disconnecting */
-        switch (__harness_random % 2) {
-          case 0: /* tty_client_disconnecting */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 3 || process_tty_client2_state == 3 || process_tty_client2_state == 4 || process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 4) && (process_tty_driver_state == 4 || process_tty_driver_state == 5 || process_tty_driver_state == 4 || process_tty_driver_state == 5)) {
-              state_transition_permitted = 1;
-              process_tty_client1_state = 4;
+            s1_ptr->connections--;
+            printf("Client 0 disconnect\n");
+            
+            label4 /* tty_client_disconnecting */: if ((RANDOM % 3) == 0) {
+              /* (tty_client_disconnecting -> tty_client_disconnecting) */
+              goto label4; /* tty_client_disconnecting */
+            } else if ((RANDOM % 3) == 0) {
+              pthread_mutex_unlock(&mutex0);
+              /* (tty_client_disconnecting -> tty_client_disconnected) */
+              goto label1; /* tty_client_disconnected */
             } else {
-              state_transition_permitted = 0;
+              pthread_mutex_lock(&mutex4);
+              pthread_mutex_unlock(&mutex0);
+              /* (tty_client_disconnecting -> tty_client_nodriver on tty_driver_unloading) */
+              goto label0; /* tty_client_nodriver */
             }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-          case 1: /* tty_client_disconnected */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client2_state == 0 || process_tty_client2_state == 1 || process_tty_client2_state == 0 || process_tty_client2_state == 2 || process_tty_client2_state == 3 || process_tty_client2_state == 4 || process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 3 || process_tty_client2_state == 4) && (process_tty_driver_state == 2 || process_tty_driver_state == 6 || process_tty_driver_state == 3 || process_tty_driver_state == 5 || process_tty_driver_state == 4 || process_tty_driver_state == 2 || process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 5 || process_tty_driver_state == 6)) {
-              state_transition_permitted = 1;
-              process_tty_client1_state = 1;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
+          }
+        } else {
+          pthread_mutex_lock(&mutex4);
+          pthread_mutex_unlock(&mutex3);
+          /* (tty_client_wait_connection -> tty_client_nodriver on tty_driver_unloading) */
+          goto label0; /* tty_client_nodriver */
         }
-        break;
-      
+      } else {
+        pthread_mutex_lock(&mutex4);
+        /* (tty_client_disconnected -> tty_client_nodriver on tty_driver_unloading) */
+        goto label0; /* tty_client_nodriver */
+      }
     }
   }
+  
   return NULL;
 }
 
-void *harness_kernel_module_process_tty_client2(void *harness_kernel_module_process_arg) {
-  (void) harness_kernel_module_process_arg; // UNUSED
+void *process_tty_client2(void *arg) {
+  (void) arg; // Unused
   
-  for (;;) {
-    __harness_mutex_lock(&harness_state_mutex);
-    const unsigned long harness_process_state = process_tty_client2_state;
-    int state_transition_permitted;
-    __harness_mutex_unlock(&harness_state_mutex);
-    switch (harness_process_state) {
-      case 0: /* tty_client_nodriver */
-        switch (__harness_random % 2) {
-          case 0: /* tty_client_nodriver */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 0 || process_tty_client1_state == 0 || process_tty_client1_state == 1 || process_tty_client1_state == 1) && (process_tty_driver_state == 0 || process_tty_driver_state == 1 || process_tty_driver_state == 2 || process_tty_driver_state == 6 || process_tty_driver_state == 0 || process_tty_driver_state == 1 || process_tty_driver_state == 2 || process_tty_driver_state == 6)) {
-              state_transition_permitted = 1;
-              process_tty_client2_state = 0;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
+  {
+    pthread_mutex_lock(&mutex2);
+    process_set_start_barrier_wait();
+    label0 /* tty_client_nodriver */: if ((RANDOM % 2) == 0) {
+      /* (tty_client_nodriver -> tty_client_nodriver) */
+      goto label0; /* tty_client_nodriver */
+    } else {
+      pthread_mutex_unlock(&mutex2);
+      /* (tty_client_nodriver -> tty_client_disconnected on tty_driver_loaded) */
+      label1 /* tty_client_disconnected */: if ((RANDOM % 3) == 0) {
+        /* (tty_client_disconnected -> tty_client_disconnected) */
+        goto label1; /* tty_client_disconnected */
+      } else if ((RANDOM % 3) == 0) {
+        pthread_mutex_lock(&mutex1);
+        /* (tty_client_disconnected -> tty_client_wait_connection) */
+        label2 /* tty_client_wait_connection */: if ((RANDOM % 3) == 0) {
+          /* (tty_client_wait_connection -> tty_client_wait_connection) */
+          goto label2; /* tty_client_wait_connection */
+        } else if ((RANDOM % 3) == 0) {
+          pthread_mutex_lock(&mutex5);
+          pthread_mutex_unlock(&mutex1);
+          /* (tty_client_wait_connection -> tty_client_connected_state on tty_driver_grant_connection) */
           
-          case 1: /* tty_client_disconnected */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 0 || process_tty_client1_state == 1 || process_tty_client1_state == 0 || process_tty_client1_state == 1 || process_tty_client1_state == 3 || process_tty_client1_state == 4 || process_tty_client1_state == 2 || process_tty_client1_state == 2 || process_tty_client1_state == 3 || process_tty_client1_state == 4) && (process_tty_driver_state == 2 || process_tty_driver_state == 6 || process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 5 || process_tty_driver_state == 2 || process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 5 || process_tty_driver_state == 6)) {
-              state_transition_permitted = 1;
-              process_tty_client2_state = 1;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
+          s1_ptr->connections++;
+          printf("Client 1 connect\n");
           
-        }
-        break;
-      
-      case 1: /* tty_client_disconnected */
-        switch (__harness_random % 3) {
-          case 0: /* tty_client_disconnected */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 0 || process_tty_client1_state == 1 || process_tty_client1_state == 0 || process_tty_client1_state == 1 || process_tty_client1_state == 3 || process_tty_client1_state == 4 || process_tty_client1_state == 2 || process_tty_client1_state == 2 || process_tty_client1_state == 3 || process_tty_client1_state == 4) && (process_tty_driver_state == 2 || process_tty_driver_state == 6 || process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 5 || process_tty_driver_state == 2 || process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 5 || process_tty_driver_state == 6)) {
-              state_transition_permitted = 1;
-              process_tty_client2_state = 1;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-          case 1: /* tty_client_wait_connection */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 1 || process_tty_client1_state == 1 || process_tty_client1_state == 3 || process_tty_client1_state == 4 || process_tty_client1_state == 3 || process_tty_client1_state == 4) && (process_tty_driver_state == 2 || process_tty_driver_state == 3 || process_tty_driver_state == 5 || process_tty_driver_state == 4 || process_tty_driver_state == 2 || process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 5)) {
-              state_transition_permitted = 1;
-              process_tty_client2_state = 2;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-          case 2: /* tty_client_nodriver */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 0 || process_tty_client1_state == 0 || process_tty_client1_state == 1 || process_tty_client1_state == 1) && (process_tty_driver_state == 0 || process_tty_driver_state == 1 || process_tty_driver_state == 2 || process_tty_driver_state == 6 || process_tty_driver_state == 0 || process_tty_driver_state == 1 || process_tty_driver_state == 2 || process_tty_driver_state == 6)) {
-              state_transition_permitted = 1;
-              process_tty_client2_state = 0;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-        }
-        break;
-      
-      case 2: /* tty_client_wait_connection */
-        switch (__harness_random % 3) {
-          case 0: /* tty_client_wait_connection */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 1 || process_tty_client1_state == 1 || process_tty_client1_state == 3 || process_tty_client1_state == 4 || process_tty_client1_state == 3 || process_tty_client1_state == 4) && (process_tty_driver_state == 2 || process_tty_driver_state == 3 || process_tty_driver_state == 5 || process_tty_driver_state == 4 || process_tty_driver_state == 2 || process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 5)) {
-              state_transition_permitted = 1;
-              process_tty_client2_state = 2;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-          case 1: /* tty_client_connected_state */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 1 || process_tty_client1_state == 2 || process_tty_client1_state == 3 || process_tty_client1_state == 1 || process_tty_client1_state == 3 || process_tty_client1_state == 4 || process_tty_client1_state == 2 || process_tty_client1_state == 4) && (process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 3 || process_tty_driver_state == 4)) {
-              state_transition_permitted = 1;
-              process_tty_client2_state = 3;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
+          label3 /* tty_client_connected_state */: if ((RANDOM % 2) == 0) {
+            /* (tty_client_connected_state -> tty_client_connected_state) */
             
-            if (state_transition_permitted) {
-              s1_ptr->connections++;
-            }
-            break;
-          
-          case 2: /* tty_client_nodriver */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 0 || process_tty_client1_state == 0 || process_tty_client1_state == 1 || process_tty_client1_state == 1) && (process_tty_driver_state == 0 || process_tty_driver_state == 1 || process_tty_driver_state == 2 || process_tty_driver_state == 6 || process_tty_driver_state == 0 || process_tty_driver_state == 1 || process_tty_driver_state == 2 || process_tty_driver_state == 6)) {
-              state_transition_permitted = 1;
-              process_tty_client2_state = 0;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-        }
-        break;
-      
-      case 3: /* tty_client_connected_state */
-        switch (__harness_random % 2) {
-          case 0: /* tty_client_connected_state */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 1 || process_tty_client1_state == 2 || process_tty_client1_state == 3 || process_tty_client1_state == 1 || process_tty_client1_state == 3 || process_tty_client1_state == 4 || process_tty_client1_state == 2 || process_tty_client1_state == 4) && (process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 3 || process_tty_driver_state == 4)) {
-              state_transition_permitted = 1;
-              process_tty_client2_state = 3;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
+            s1_ptr->value++;
+            printf("Client 1 use\n");
             
-            if (state_transition_permitted) {
-              s1_ptr->value++;
-            }
-            break;
-          
-          case 1: /* tty_client_disconnecting */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 1 || process_tty_client1_state == 2 || process_tty_client1_state == 3 || process_tty_client1_state == 4 || process_tty_client1_state == 1 || process_tty_client1_state == 2 || process_tty_client1_state == 3 || process_tty_client1_state == 4) && (process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 3 || process_tty_driver_state == 4)) {
-              state_transition_permitted = 1;
-              process_tty_client2_state = 4;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
+            goto label3; /* tty_client_connected_state */
+          } else {
+            /* (tty_client_connected_state -> tty_client_disconnecting) */
             
-            if (state_transition_permitted) {
-              s1_ptr->connections--;
-            }
-            break;
-          
-        }
-        break;
-      
-      case 4: /* tty_client_disconnecting */
-        switch (__harness_random % 2) {
-          case 0: /* tty_client_disconnecting */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 1 || process_tty_client1_state == 2 || process_tty_client1_state == 3 || process_tty_client1_state == 4 || process_tty_client1_state == 1 || process_tty_client1_state == 2 || process_tty_client1_state == 3 || process_tty_client1_state == 4) && (process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 3 || process_tty_driver_state == 4)) {
-              state_transition_permitted = 1;
-              process_tty_client2_state = 4;
+            s1_ptr->connections--;
+            printf("Client 1 disconnect\n");
+            
+            label4 /* tty_client_disconnecting */: if ((RANDOM % 3) == 0) {
+              /* (tty_client_disconnecting -> tty_client_disconnecting) */
+              goto label4; /* tty_client_disconnecting */
+            } else if ((RANDOM % 3) == 0) {
+              pthread_mutex_unlock(&mutex5);
+              /* (tty_client_disconnecting -> tty_client_disconnected) */
+              goto label1; /* tty_client_disconnected */
             } else {
-              state_transition_permitted = 0;
+              pthread_mutex_lock(&mutex2);
+              pthread_mutex_unlock(&mutex5);
+              /* (tty_client_disconnecting -> tty_client_nodriver on tty_driver_unloading) */
+              goto label0; /* tty_client_nodriver */
             }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-          case 1: /* tty_client_disconnected */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 0 || process_tty_client1_state == 1 || process_tty_client1_state == 0 || process_tty_client1_state == 1 || process_tty_client1_state == 3 || process_tty_client1_state == 4 || process_tty_client1_state == 2 || process_tty_client1_state == 2 || process_tty_client1_state == 3 || process_tty_client1_state == 4) && (process_tty_driver_state == 2 || process_tty_driver_state == 6 || process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 5 || process_tty_driver_state == 2 || process_tty_driver_state == 3 || process_tty_driver_state == 4 || process_tty_driver_state == 5 || process_tty_driver_state == 6)) {
-              state_transition_permitted = 1;
-              process_tty_client2_state = 1;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
+          }
+        } else {
+          pthread_mutex_lock(&mutex2);
+          pthread_mutex_unlock(&mutex1);
+          /* (tty_client_wait_connection -> tty_client_nodriver on tty_driver_unloading) */
+          goto label0; /* tty_client_nodriver */
         }
-        break;
-      
+      } else {
+        pthread_mutex_lock(&mutex2);
+        /* (tty_client_disconnected -> tty_client_nodriver on tty_driver_unloading) */
+        goto label0; /* tty_client_nodriver */
+      }
     }
   }
+  
   return NULL;
 }
 
-void *harness_kernel_module_process_tty_driver(void *harness_kernel_module_process_arg) {
-  (void) harness_kernel_module_process_arg; // UNUSED
+void *process_tty_driver(void *arg) {
+  (void) arg; // Unused
   
-  for (;;) {
-    __harness_mutex_lock(&harness_state_mutex);
-    const unsigned long harness_process_state = process_tty_driver_state;
-    int state_transition_permitted;
-    __harness_mutex_unlock(&harness_state_mutex);
-    switch (harness_process_state) {
-      case 0: /* tty_driver_unloaded */
-        switch (__harness_random % 2) {
-          case 0: /* tty_driver_unloaded */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 0 || process_tty_client1_state == 0) && (process_tty_client2_state == 0 || process_tty_client2_state == 0)) {
-              state_transition_permitted = 1;
-              process_tty_driver_state = 0;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-          case 1: /* tty_driver_loading */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 0 || process_tty_client1_state == 0) && (process_tty_client2_state == 0 || process_tty_client2_state == 0)) {
-              state_transition_permitted = 1;
-              process_tty_driver_state = 1;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
+  
+  struct S1 s1_impl;
+  
+  
+  {
+    pthread_mutex_lock(&mutex0);
+    pthread_mutex_lock(&mutex1);
+    pthread_mutex_lock(&mutex3);
+    pthread_mutex_lock(&mutex5);
+    process_set_start_barrier_wait();
+    label0 /* tty_driver_unloaded */: if ((RANDOM % 2) == 0) {
+      /* (tty_driver_unloaded -> tty_driver_unloaded) */
+      goto label0; /* tty_driver_unloaded */
+    } else {
+      /* (tty_driver_unloaded -> tty_driver_loading) */
+      
+      s1_impl.connections = 0;
+      s1_impl.value = 0;
+      s1_ptr = &s1_impl;
+      printf("Driver load\n");
+      
+      label1 /* tty_driver_loading */: if ((RANDOM % 2) == 0) {
+        /* (tty_driver_loading -> tty_driver_loading) */
+        goto label1; /* tty_driver_loading */
+      } else {
+        pthread_mutex_unlock(&mutex3);
+        pthread_mutex_unlock(&mutex1);
+        /* (tty_driver_loading -> tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive)) */
+        label2 /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive) */: if ((RANDOM % 3) == 0) {
+          pthread_mutex_lock(&mutex1);
+          pthread_mutex_lock(&mutex3);
+          /* (tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive) -> tty_driver_unloading) */
+          label3 /* tty_driver_unloading */: if ((RANDOM % 2) == 0) {
+            /* (tty_driver_unloading -> tty_driver_unloading) */
+            goto label3; /* tty_driver_unloading */
+          } else {
+            /* (tty_driver_unloading -> tty_driver_unloaded) */
             
-            if (state_transition_permitted) {
-              static struct S1 s1;
-              s1.connections = 0;
-              s1.value = 0;
-              s1_ptr = &s1;
-            }
-            break;
-          
-        }
-        break;
-      
-      case 1: /* tty_driver_loading */
-        switch (__harness_random % 2) {
-          case 0: /* tty_driver_loading */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 0 || process_tty_client1_state == 0) && (process_tty_client2_state == 0 || process_tty_client2_state == 0)) {
-              state_transition_permitted = 1;
-              process_tty_driver_state = 1;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-          case 1: /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive) */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 0 || process_tty_client1_state == 1 || process_tty_client1_state == 2 || process_tty_client1_state == 0 || process_tty_client1_state == 1 || process_tty_client1_state == 2) && (process_tty_client2_state == 0 || process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 0 || process_tty_client2_state == 1 || process_tty_client2_state == 2)) {
-              state_transition_permitted = 1;
-              process_tty_driver_state = 2;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-        }
-        break;
-      
-      case 2: /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive) */
-        switch (__harness_random % 3) {
-          case 0: /* tty_driver_unloading */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 0 || process_tty_client1_state == 1 || process_tty_client1_state == 1 || process_tty_client1_state == 0) && (process_tty_client2_state == 0 || process_tty_client2_state == 1 || process_tty_client2_state == 1 || process_tty_client2_state == 0)) {
-              state_transition_permitted = 1;
-              process_tty_driver_state = 6;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
+            printf("Driver unload\n");
+            s1_ptr = NULL;
             
-            if (state_transition_permitted) {
-              s1_ptr = NULL;
-            }
-            break;
-          
-          case 1: /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive) */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 1 || process_tty_client1_state == 2 || process_tty_client1_state == 3 || process_tty_client1_state == 4 || process_tty_client1_state == 3 || process_tty_client1_state == 4 || process_tty_client1_state == 1 || process_tty_client1_state == 2) && (process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 1 || process_tty_client2_state == 2)) {
-              state_transition_permitted = 1;
-              process_tty_driver_state = 5;
+            goto label0; /* tty_driver_unloaded */
+          }
+        } else if ((RANDOM % 3) == 0) {
+          pthread_mutex_lock(&mutex4);
+          pthread_mutex_unlock(&mutex0);
+          /* (tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive) -> tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive) on (tty_client_request_connection, _)) */
+          label4 /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive) */: if ((RANDOM % 2) == 0) {
+            pthread_mutex_lock(&mutex0);
+            pthread_mutex_unlock(&mutex4);
+            /* (tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive) -> tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive) on (tty_client_disconnect, _)) */
+            goto label2; /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive) */
+          } else {
+            pthread_mutex_lock(&mutex2);
+            pthread_mutex_unlock(&mutex5);
+            /* (tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive) -> tty_driver_loaded (tty_driver_client_active, tty_driver_client_active) on (_, tty_client_request_connection)) */
+            goto label5; /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_active) */
+          }
+        } else {
+          pthread_mutex_lock(&mutex2);
+          pthread_mutex_unlock(&mutex5);
+          /* (tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive) -> tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active) on (_, tty_client_request_connection)) */
+          label6 /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active) */: if ((RANDOM % 2) == 0) {
+            pthread_mutex_lock(&mutex4);
+            pthread_mutex_unlock(&mutex0);
+            /* (tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active) -> tty_driver_loaded (tty_driver_client_active, tty_driver_client_active) on (tty_client_request_connection, _)) */
+            label5 /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_active) */: if ((RANDOM % 2) == 0) {
+              pthread_mutex_lock(&mutex0);
+              pthread_mutex_unlock(&mutex4);
+              /* (tty_driver_loaded (tty_driver_client_active, tty_driver_client_active) -> tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active) on (tty_client_disconnect, _)) */
+              goto label6; /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active) */
             } else {
-              state_transition_permitted = 0;
+              pthread_mutex_lock(&mutex5);
+              pthread_mutex_unlock(&mutex2);
+              /* (tty_driver_loaded (tty_driver_client_active, tty_driver_client_active) -> tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive) on (_, tty_client_disconnect)) */
+              goto label4; /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive) */
             }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-          case 2: /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active) */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 1 || process_tty_client1_state == 2 || process_tty_client1_state == 1 || process_tty_client1_state == 2) && (process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 3 || process_tty_client2_state == 4 || process_tty_client2_state == 2 || process_tty_client2_state == 3 || process_tty_client2_state == 4 || process_tty_client2_state == 1)) {
-              state_transition_permitted = 1;
-              process_tty_driver_state = 3;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
+          } else {
+            pthread_mutex_lock(&mutex5);
+            pthread_mutex_unlock(&mutex2);
+            /* (tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active) -> tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive) on (_, tty_client_disconnect)) */
+            goto label2; /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive) */
+          }
         }
-        break;
-      
-      case 3: /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active) */
-        switch (__harness_random % 2) {
-          case 0: /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_active) */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 1 || process_tty_client1_state == 2 || process_tty_client1_state == 3 || process_tty_client1_state == 4 || process_tty_client1_state == 2 || process_tty_client1_state == 3 || process_tty_client1_state == 4 || process_tty_client1_state == 1) && (process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 3 || process_tty_client2_state == 4 || process_tty_client2_state == 4 || process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 3)) {
-              state_transition_permitted = 1;
-              process_tty_driver_state = 4;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-          case 1: /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive) */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 0 || process_tty_client1_state == 1 || process_tty_client1_state == 2 || process_tty_client1_state == 0 || process_tty_client1_state == 1 || process_tty_client1_state == 2) && (process_tty_client2_state == 0 || process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 0 || process_tty_client2_state == 1 || process_tty_client2_state == 2)) {
-              state_transition_permitted = 1;
-              process_tty_driver_state = 2;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-        }
-        break;
-      
-      case 4: /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_active) */
-        switch (__harness_random % 2) {
-          case 0: /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active) */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 1 || process_tty_client1_state == 2 || process_tty_client1_state == 1 || process_tty_client1_state == 2) && (process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 3 || process_tty_client2_state == 4 || process_tty_client2_state == 2 || process_tty_client2_state == 3 || process_tty_client2_state == 4 || process_tty_client2_state == 1)) {
-              state_transition_permitted = 1;
-              process_tty_driver_state = 3;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-          case 1: /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive) */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 1 || process_tty_client1_state == 2 || process_tty_client1_state == 3 || process_tty_client1_state == 4 || process_tty_client1_state == 3 || process_tty_client1_state == 4 || process_tty_client1_state == 1 || process_tty_client1_state == 2) && (process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 1 || process_tty_client2_state == 2)) {
-              state_transition_permitted = 1;
-              process_tty_driver_state = 5;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-        }
-        break;
-      
-      case 5: /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive) */
-        switch (__harness_random % 2) {
-          case 0: /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive) */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 0 || process_tty_client1_state == 1 || process_tty_client1_state == 2 || process_tty_client1_state == 0 || process_tty_client1_state == 1 || process_tty_client1_state == 2) && (process_tty_client2_state == 0 || process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 0 || process_tty_client2_state == 1 || process_tty_client2_state == 2)) {
-              state_transition_permitted = 1;
-              process_tty_driver_state = 2;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-          case 1: /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_active) */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 1 || process_tty_client1_state == 2 || process_tty_client1_state == 3 || process_tty_client1_state == 4 || process_tty_client1_state == 2 || process_tty_client1_state == 3 || process_tty_client1_state == 4 || process_tty_client1_state == 1) && (process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 3 || process_tty_client2_state == 4 || process_tty_client2_state == 4 || process_tty_client2_state == 1 || process_tty_client2_state == 2 || process_tty_client2_state == 3)) {
-              state_transition_permitted = 1;
-              process_tty_driver_state = 4;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-        }
-        break;
-      
-      case 6: /* tty_driver_unloading */
-        switch (__harness_random % 2) {
-          case 0: /* tty_driver_unloading */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 0 || process_tty_client1_state == 1 || process_tty_client1_state == 1 || process_tty_client1_state == 0) && (process_tty_client2_state == 0 || process_tty_client2_state == 1 || process_tty_client2_state == 1 || process_tty_client2_state == 0)) {
-              state_transition_permitted = 1;
-              process_tty_driver_state = 6;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-          case 1: /* tty_driver_unloaded */
-            __harness_mutex_lock(&harness_state_mutex);
-            if ((process_tty_client1_state == 0 || process_tty_client1_state == 0) && (process_tty_client2_state == 0 || process_tty_client2_state == 0)) {
-              state_transition_permitted = 1;
-              process_tty_driver_state = 0;
-            } else {
-              state_transition_permitted = 0;
-            }
-            __harness_mutex_unlock(&harness_state_mutex);
-            break;
-          
-        }
-        break;
-      
+      }
     }
   }
+  
   return NULL;
 }
 
-int main(void) {
-  __harness_mutex_init(&harness_state_mutex, NULL);
-  process_tty_client1_state = 0;
-  process_tty_client2_state = 0;
-  process_tty_driver_state = 0;
+
+int main() {
+  pthread_t process_thread_tty_client1;
+  pthread_t process_thread_tty_client2;
+  pthread_t process_thread_tty_driver;
   
-  __harness_thread process_tty_client1;
-  __harness_thread process_tty_client2;
-  __harness_thread process_tty_driver;
+  pthread_mutex_init(&process_set_start_barrier_mtx, NULL);
+  process_set_start_barrier_epoch = 0;
+  process_set_start_barrier_waiting = 0;
+  process_set_start_barrier_size = 3;
+  pthread_mutex_init(&mutex0, NULL);
+  pthread_mutex_init(&mutex1, NULL);
+  pthread_mutex_init(&mutex2, NULL);
+  pthread_mutex_init(&mutex3, NULL);
+  pthread_mutex_init(&mutex4, NULL);
+  pthread_mutex_init(&mutex5, NULL);
   
-  __harness_thread_create(&process_tty_client1, NULL, harness_kernel_module_process_tty_client1, NULL);
-  __harness_thread_create(&process_tty_client2, NULL, harness_kernel_module_process_tty_client2, NULL);
-  __harness_thread_create(&process_tty_driver, NULL, harness_kernel_module_process_tty_driver, NULL);
+  pthread_create(&process_thread_tty_client1, NULL, process_tty_client1, NULL);
+  pthread_create(&process_thread_tty_client2, NULL, process_tty_client2, NULL);
+  pthread_create(&process_thread_tty_driver, NULL, process_tty_driver, NULL);
   
-  __harness_thread_join(process_tty_client1, NULL);
-  __harness_thread_join(process_tty_client2, NULL);
-  __harness_thread_join(process_tty_driver, NULL);
+  pthread_join(process_thread_tty_client1, NULL);
+  pthread_join(process_thread_tty_client2, NULL);
+  pthread_join(process_thread_tty_driver, NULL);
+  
   return 0;
 }
-

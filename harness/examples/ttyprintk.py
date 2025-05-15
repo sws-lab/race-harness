@@ -1,8 +1,9 @@
 from harness.core import ProcessSet, ProcessSetMutualExclusion
 from harness.entities import StateGraphSimpleNode, StateGraphSimpleAction, StateGraphSimpleMessage, StateGraphProductNode, StateGraphDerivedNode, StateGraphProductResponseMessageDestination, StateGraphProductMessage, StateGraphGroupMessageDestination
 from harness.control_flow import ControlFlowBuilder, ControlFlowFormatter, ControlFlowMutexSet
+from harness.codegen.control_flow import HarnessControlFlowGoblintUserspaceCodegen
 
-NUM_OF_CLIENTS = 3
+NUM_OF_CLIENTS = 2
 
 # Messages are quite simple. Driver might communicate to the clients that it has been loaded
 # (in reality there is no such communication, but corresponding invariant is simply upheld by the kernel).
@@ -94,11 +95,57 @@ tty_driver_unloading_state.add_edge(trigger=None, target=tty_driver_unloaded_sta
 state_space = processes.state_space
 mutual_exclusion = ProcessSetMutualExclusion(state_space)
 mutex_set = ControlFlowMutexSet(mutual_exclusion.mutual_exclusion_segments)
+control_flow_nodes = {
+    process: ControlFlowBuilder(process.entry_node).control_flow(process, mutex_set)
+    for process in processes.processes
+}
 
-formatter = ControlFlowFormatter()
-for process in processes.processes:
-    builder = ControlFlowBuilder(process.entry_node)
-    print(formatter.format(builder.control_flow(process, mutex_set).canonicalize()))
+codegen = HarnessControlFlowGoblintUserspaceCodegen()
+codegen.set_global_prologue('''
+struct S1 {
+    _Atomic unsigned int connections;
+    _Atomic unsigned int value; // Remove _Atomic for data race
+};
+                            
+static struct S1 *s1_ptr = NULL;
+''')
+codegen.set_process_prologue(tty_driver, '''
+struct S1 s1_impl;
+''')
+
+codegen.set_action(tty_driver_load_action, '''
+s1_impl.connections = 0;
+s1_impl.value = 0;
+s1_ptr = &s1_impl;
+printf("Driver load\\n");
+''')
+codegen.set_action(tty_driver_unloaded_action, '''
+printf("Driver unload\\n");
+s1_ptr = NULL;
+''')
+codegen.set_action(tty_client_acquire_connection_action, '''
+s1_ptr->connections++;
+printf("Client %client_id% connect\\n");
+''')
+codegen.set_action(tty_client_disconnect_action, '''
+s1_ptr->connections--;
+printf("Client %client_id% disconnect\\n");
+''')
+codegen.set_action(tty_client_use_connection_action, '''
+s1_ptr->value++;
+printf("Client %client_id% use\\n");
+''')
+
+for index, client in enumerate(tty_clients):
+    codegen.set_process_parameters(client, {
+        'client_id': index
+    })
+
+print(codegen.format(control_flow_nodes, mutex_set))
+# formatter = ControlFlowFormatter()
+# for process in processes.processes:
+#     builder = ControlFlowBuilder(process.entry_node)
+#     print(formatter.format(builder.control_flow(process, mutex_set).canonicalize()))
 
 
 # for mtx in mutual_exclusion.mutual_exclusion_segments:
