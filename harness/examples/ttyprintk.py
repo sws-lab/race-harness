@@ -102,38 +102,53 @@ control_flow_nodes = {
 
 codegen = HarnessControlFlowGoblintUserspaceCodegen()
 codegen.set_global_prologue('''
-struct S1 {
-    _Atomic unsigned int connections;
-    _Atomic unsigned int value; // Remove _Atomic for data race
-};
+#include "linux/compiler_types.h"
+#include "linux/kconfig.h"
+#include "asm/orc_header.h"
+#include "linux/build-salt.h"
+#include "linux/console.h"
+#include "linux/device.h"
+#include "linux/elfnote-lto.h"
+#include "linux/export-internal.h"
+#include "linux/module.h"
+#include "linux/serial.h"
+#include "linux/tty.h"
                             
-static struct S1 *s1_ptr = NULL;
+#define pthread_t __harness_thread_t
+#define pthread_mutex_t __harness_thread_mutex_t
+#define pthread_create __harness_thread_create
+#define pthread_join __harness_thread_join
+#define pthread_mutex_init __harness_mutex_init
+#define pthread_mutex_lock __harness_mutex_lock
+#define pthread_mutex_unlock __harness_mutex_unlock
+
+extern struct tty_driver *registered_tty_driver;
 ''')
-codegen.set_process_prologue(tty_driver, '''
-struct S1 s1_impl;
+codegen.set_process_prologue(tty_clients[0], '''
+struct tty_struct tty;
+struct file file;
+const char content[] = "client%client_id%";
+''')
+codegen.set_process_prologue(tty_clients[1], '''
+struct tty_struct tty;
+struct file file;
+const char content[] = "client%client_id%";
 ''')
 
 codegen.set_action(tty_driver_load_action, '''
-s1_impl.connections = 0;
-s1_impl.value = 0;
-s1_ptr = &s1_impl;
-printf("Driver load\\n");
+init_module();
 ''')
 codegen.set_action(tty_driver_unloaded_action, '''
-printf("Driver unload\\n");
-s1_ptr = NULL;
+cleanup_module();
 ''')
 codegen.set_action(tty_client_acquire_connection_action, '''
-s1_ptr->connections++;
-printf("Client %client_id% connect\\n");
+registered_tty_driver->ops->open(&tty, &file);
 ''')
 codegen.set_action(tty_client_disconnect_action, '''
-s1_ptr->connections--;
-printf("Client %client_id% disconnect\\n");
+registered_tty_driver->ops->close(&tty, &file);
 ''')
 codegen.set_action(tty_client_use_connection_action, '''
-s1_ptr->value++;
-printf("Client %client_id% use\\n");
+registered_tty_driver->ops->write(&tty, content, sizeof(content));
 ''')
 
 for index, client in enumerate(tty_clients):
@@ -142,14 +157,3 @@ for index, client in enumerate(tty_clients):
     })
 
 print(codegen.format(control_flow_nodes, mutex_set))
-# formatter = ControlFlowFormatter()
-# for process in processes.processes:
-#     builder = ControlFlowBuilder(process.entry_node)
-#     print(formatter.format(builder.control_flow(process, mutex_set).canonicalize()))
-
-
-# for mtx in mutual_exclusion.mutual_exclusion_segments:
-#     print('{')
-#     for other_process, other_state in mtx:
-#         print(f'\t{other_process}: {other_state}')
-#     print('}')

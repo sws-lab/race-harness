@@ -15,12 +15,12 @@
 #include "linux/export-internal.h"
 #include "linux/module.h"
 
-extern volatile int RANDOM;
+extern _Atomic int RANDOM;
 
 // __raw_spin_lock_init [include/linux/spinlock.h line 101 column 15]
 extern void __raw_spin_lock_init(raw_spinlock_t *lock, const char *name,
 				   struct lock_class_key *key, short inner) {
-	spin_lock_init(lock);
+	__spin_lock_init(lock);
 }
 
 // __read_overflow [include/linux/fortify-string.h line 57 column 6]
@@ -74,15 +74,4 @@ __printf(1, 2) __cold
 int _printk(const char *fmt, ...) {
 	X++;
 	return 0;
-}
-
-// _raw_spin_lock_irqsave [include/linux/spinlock_api_smp.h line 32 column 26]
-unsigned long __lockfunc _raw_spin_lock_irqsave(raw_spinlock_t *lock) {
-	return spin_trylock(lock);
-}
-
-// _raw_spin_unlock_irqrestore [include/linux/spinlock_api_smp.h line 43 column 1]
-void __lockfunc
-_raw_spin_unlock_irqrestore(raw_spinlock_t *lock, unsigned long flags) {
-	spin_unlock(lock);
 }

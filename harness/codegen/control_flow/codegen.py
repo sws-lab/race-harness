@@ -334,9 +334,16 @@ class HarnessControlFlowUserspaceCodegen(HarnessControlFlowBaseCodegen):
     
 class HarnessControlFlowGoblintUserspaceCodegen(HarnessControlFlowUserspaceCodegen):
     def _prologue(self):
-        yield from super()._prologue()
-        yield ''
-        yield 'extern _Atomic int RANDOM;'
+        yield from self._embed_multiline('''
+extern _Atomic int RANDOM;
+typedef unsigned int __harness_thread_t;
+typedef unsigned int __harness_thread_mutex_t;
+extern void __harness_thread_create(__harness_thread_t *, void *, void *(*)(void *), void *);
+extern void __harness_thread_join(__harness_thread_t, void **);
+extern void __harness_mutex_init(__harness_thread_mutex_t *, void *);
+extern void __harness_mutex_lock(__harness_thread_mutex_t *);
+extern void __harness_mutex_unlock(__harness_thread_mutex_t *);
+''')
 
     def _declare_barrier(self, barrier: str):
         yield f'static pthread_mutex_t {barrier}_mtx;'

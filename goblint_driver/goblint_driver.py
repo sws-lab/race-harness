@@ -77,7 +77,7 @@ class GoblintDriver:
             self._logger.info('Starting Goblint with configuration %s on %s', goblint_conf_content, inputs)
             goblint = subprocess.Popen(
                 executable=self._goblint_filepath,
-                args=[self._goblint_filepath, '--conf', goblint_conf.name, '--conf', '/home/jprotopopov/goblint/analyzer/conf/examples/very-precise.json', '--enable', 'allglobs', *self._goblint_extra_args, *inputs],
+                args=[self._goblint_filepath, '--conf', goblint_conf.name, '--conf', '/home/jprotopopov/goblint/analyzer/conf/examples/very-precise.json', *self._goblint_extra_args, *inputs],
                 stdin=subprocess.DEVNULL,
                 shell=False
             )

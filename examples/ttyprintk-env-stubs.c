@@ -19,7 +19,7 @@
 #include "linux/serial.h"
 #include "linux/tty.h"
 
-extern volatile int RANDOM;
+extern _Atomic int RANDOM;
 
 struct ktermios tty_std_termios = {0};
 
@@ -43,6 +43,10 @@ void tty_unregister_driver(struct tty_driver *driver) {
 void tty_driver_kref_put(struct tty_driver *driver) {}
 
 void tty_port_init(struct tty_port *port) {
+  *port = (struct tty_port){0};
+}
+
+void tty_port_close(struct tty_port *port, struct tty_struct *tty, struct file *file) {
   *port = (struct tty_port){0};
 }
 
