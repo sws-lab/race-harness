@@ -1,9 +1,9 @@
 from harness.core import ProcessSet, ProcessSetMutualExclusion
 from harness.entities import StateGraphSimpleNode, StateGraphSimpleAction, StateGraphSimpleMessage, StateGraphProductNode, StateGraphDerivedNode, StateGraphProductResponseMessageDestination, StateGraphProductMessage, StateGraphGroupMessageDestination
 from harness.control_flow import ControlFlowBuilder, ControlFlowFormatter, ControlFlowMutexSet
-from harness.codegen.control_flow import HarnessControlFlowKernelCodegen
+from harness.codegen.control_flow import HarnessControlFlowGoblintCodegen
 
-NUM_OF_CLIENTS = 2
+NUM_OF_CLIENTS = 3
 
 # Messages are quite simple. Driver might communicate to the clients that it has been loaded
 # (in reality there is no such communication, but corresponding invariant is simply upheld by the kernel).
@@ -99,61 +99,3 @@ control_flow_nodes = {
     process: ControlFlowBuilder(process.entry_node).control_flow(process, mutex_set)
     for process in processes.processes
 }
-
-codegen = HarnessControlFlowKernelCodegen()
-codegen.set_global_prologue('''
-#include "linux/compiler_types.h"
-#include "linux/kconfig.h"
-#include "asm/orc_header.h"
-#include "linux/build-salt.h"
-#include "linux/console.h"
-#include "linux/device.h"
-#include "linux/elfnote-lto.h"
-#include "linux/export-internal.h"
-#include "linux/module.h"
-#include "linux/serial.h"
-#include "linux/tty.h"
-                            
-#define pthread_t __harness_thread_t
-#define pthread_mutex_t __harness_thread_mutex_t
-#define pthread_create __harness_thread_create
-#define pthread_join __harness_thread_join
-#define pthread_mutex_init __harness_mutex_init
-#define pthread_mutex_lock __harness_mutex_lock
-#define pthread_mutex_unlock __harness_mutex_unlock
-
-extern struct tty_driver *registered_tty_driver;
-''')
-codegen.set_process_prologue(tty_clients[0], '''
-struct tty_struct tty;
-struct file file;
-const char content[] = "client%client_id%";
-''')
-codegen.set_process_prologue(tty_clients[1], '''
-struct tty_struct tty;
-struct file file;
-const char content[] = "client%client_id%";
-''')
-
-codegen.set_action(tty_driver_load_action, '''
-init_module();
-''')
-codegen.set_action(tty_driver_unloaded_action, '''
-cleanup_module();
-''')
-codegen.set_action(tty_client_acquire_connection_action, '''
-registered_tty_driver->ops->open(&tty, &file);
-''')
-codegen.set_action(tty_client_disconnect_action, '''
-registered_tty_driver->ops->close(&tty, &file);
-''')
-codegen.set_action(tty_client_use_connection_action, '''
-registered_tty_driver->ops->write(&tty, content, sizeof(content));
-''')
-
-for index, client in enumerate(tty_clients):
-    codegen.set_process_parameters(client, {
-        'client_id': index
-    })
-
-print(codegen.format(control_flow_nodes, mutex_set))
