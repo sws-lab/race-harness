@@ -1,6 +1,6 @@
 import abc
 import io
-from typing import Dict, Iterable, Union, Any, List
+from typing import Dict, Iterable, Union, Any, List, Optional
 from harness.core import Process, StateGraphAction
 from harness.control_flow import ControlFlowNode, ControlFlowMutexSet, ControlFlowStatement, ControlFlowLabelledNode, ControlFlowLabel, ControlFlowSequence, ControlFlowBranchNode, ControlFlowGotoNode, ControlFlowSynchronization, ControlFlowMutex
 from harness.codegen.error import HarnessCodegenError
@@ -128,7 +128,7 @@ class HarnessControlFlowBaseCodegen(abc.ABC):
         elif node.as_goto():
             yield from self._format_goto(node.as_goto(), label_map)
         elif node.as_synchronization():
-            yield from self._format_synchronization(node.as_synchronization())
+            yield from self._format_synchronization(node.as_synchronization(), label_map)
         elif node.as_init_barrier():
             yield from self._format_init_barrier(process, other_processes)
         else:
@@ -185,7 +185,7 @@ class HarnessControlFlowBaseCodegen(abc.ABC):
         label_name = self._get_label(goto.label, label_map)
         yield f'goto {label_name}; /* {goto.label.node.mnemonic} */'
 
-    def _format_synchronization(self, synchonization: ControlFlowSynchronization) -> IntOrStrIterable:
+    def _format_synchronization(self, synchonization: ControlFlowSynchronization, label_map: Dict[ControlFlowLabel, str]) -> IntOrStrIterable:
         lock = sorted(
             (
                 mtx
@@ -199,7 +199,10 @@ class HarnessControlFlowBaseCodegen(abc.ABC):
             ), key=lambda mtx: mtx.identifier
         ))
 
-        yield from self._mutex_set_transition(lock, unlock)
+        rollback_on_failure = None
+        if synchonization.rollback_on_failure is not None:
+            rollback_on_failure = self._get_label(synchonization.rollback_on_failure, label_map)
+        yield from self._mutex_set_transition(lock, unlock, rollback_on_failure)
 
     def _format_init_barrier(self, process: Process, other_processes: Iterable[Process]) -> IntOrStrIterable:
         yield from self._init_barrier_wait(process, other_processes)
@@ -250,7 +253,7 @@ class HarnessControlFlowBaseCodegen(abc.ABC):
     def _unlock_mutex(self, mutex: str): pass
 
     @abc.abstractmethod
-    def _mutex_set_transition(self, lock: Iterable[ControlFlowMutex], unlock: Iterable[ControlFlowMutex]): pass
+    def _mutex_set_transition(self, lock: Iterable[ControlFlowMutex], unlock: Iterable[ControlFlowMutex], rollback_on_failure: Optional[str]): pass
 
     @abc.abstractmethod
     def _init_barrier_wait(self, process: Process, other_processes: Iterable[Process]) -> IntOrStrIterable: pass

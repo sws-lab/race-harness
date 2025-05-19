@@ -1,4 +1,4 @@
-from typing import Iterable
+from typing import Iterable, Optional
 from harness.core import Process
 from harness.control_flow import ControlFlowMutex
 from harness.codegen.control_flow.base import HarnessControlFlowBaseCodegen, IntOrStrIterable
@@ -59,7 +59,7 @@ class HarnessControlFlowExecutableCodegen(HarnessControlFlowBaseCodegen):
     def _init_barrier_wait(self, process: Process, other_processes: Iterable[Process]) -> IntOrStrIterable:
         yield f'pthread_barrier_wait(&harness_init_barrier);'
 
-    def _mutex_set_transition(self, lock: Iterable[ControlFlowMutex], unlock: Iterable[ControlFlowMutex]) -> IntOrStrIterable:
+    def _mutex_set_transition(self, lock: Iterable[ControlFlowMutex], unlock: Iterable[ControlFlowMutex], rollback_on_failure: Optional[str]) -> IntOrStrIterable:
         lock_mtx = sorted(
             (
                 mtx
@@ -72,11 +72,34 @@ class HarnessControlFlowExecutableCodegen(HarnessControlFlowBaseCodegen):
                 for mtx in unlock
             ), key=lambda mtx: mtx.identifier
         ))
+        
+        if lock_mtx:
+            if rollback_on_failure is not None:
+                yield 'for (;;) {'
+                yield 1
 
+                for mtx_index, mtx in enumerate(lock_mtx):
+                    yield f'if (pthread_mutex_trylock(&{self._mutex_name(mtx)})) {{'
+                    yield 1
+
+                    for i in range(mtx_index - 1, -1, -1):
+                        yield f'pthread_mutex_unlock(&{self._mutex_name(lock_mtx[i])});'
+                    if rollback_on_failure is not None:
+                        yield f'goto {rollback_on_failure};'
+                    else:
+                        yield 'continue;'
+
+                    yield -1
+                    yield '}'
+                yield 'break;'
+
+                yield -1
+                yield '}'
+            else:
+                for mtx in lock_mtx:
+                    yield from self._lock_mutex(self._mutex_name(mtx))
         for mtx in unlock_mtx:
             yield from self._unlock_mutex(self._mutex_name(mtx))
-        for mtx in lock_mtx:
-            yield from self._lock_mutex(self._mutex_name(mtx))
 
     def _random(self, max: int) -> str:
         return f'(rand() % {max})'

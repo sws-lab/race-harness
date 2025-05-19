@@ -75,7 +75,7 @@ class ControlFlowBuilder:
             unlocked_mutexes.difference_update(hold_mutexes)
             locked_mutexes.difference_update(hold_mutexes)
             if locked_mutexes or unlocked_mutexes:
-                sequence.insert(0, ControlFlowSynchronization(locked_mutexes, unlocked_mutexes))
+                sequence.insert(0, ControlFlowSynchronization(locked_mutexes, unlocked_mutexes, rollback_on_failure=self._labelled_states[edge.source]))
             return ControlFlowSequence(sequence)
         
         generated_states.add(state)

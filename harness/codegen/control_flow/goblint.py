@@ -1,4 +1,4 @@
-from typing import Iterable
+from typing import Iterable, Optional
 from harness.core import Process
 from harness.control_flow import ControlFlowMutex
 from harness.codegen.control_flow.base import HarnessControlFlowBaseCodegen, IntOrStrIterable
@@ -74,7 +74,7 @@ extern void __harness_mutex_unlock(__harness_mutex_t *);
     def _unlock_mutex(self, mutex: str):
         yield f'__harness_mutex_unlock(&{mutex});'
     
-    def _mutex_set_transition(self, lock: Iterable[ControlFlowMutex], unlock: Iterable[ControlFlowMutex]) -> IntOrStrIterable:
+    def _mutex_set_transition(self, lock: Iterable[ControlFlowMutex], unlock: Iterable[ControlFlowMutex], rollback_label: Optional[str]) -> IntOrStrIterable:
         lock_mtx = sorted(
             (
                 mtx

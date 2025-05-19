@@ -103,10 +103,11 @@ class ControlFlowBranchNode(ControlFlowNode):
         return bool(self._branches)
     
 class ControlFlowSynchronization(ControlFlowNode):
-    def __init__(self, lock: Iterable[ControlFlowMutex], unlock: Iterable[ControlFlowMutex]):
+    def __init__(self, lock: Iterable[ControlFlowMutex], unlock: Iterable[ControlFlowMutex], rollback_on_failure: Optional['ControlFlowLabel'] = None):
         super().__init__()
         self._lock = list(lock)
         self._unlock = list(unlock)
+        self._rollback_label = rollback_on_failure
 
     @property
     def lock(self) -> Iterable[ControlFlowMutex]:
@@ -115,6 +116,10 @@ class ControlFlowSynchronization(ControlFlowNode):
     @property
     def unlock(self) -> Iterable[ControlFlowMutex]:
         yield from self._unlock
+
+    @property
+    def rollback_on_failure(self) -> Optional['ControlFlowLabel']:
+        return self._rollback_label
 
     def as_synchronization(self):
         return self
