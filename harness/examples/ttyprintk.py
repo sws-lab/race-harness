@@ -1,7 +1,7 @@
 from harness.core import ProcessSet, ProcessSetMutualExclusion
 from harness.entities import StateGraphSimpleNode, StateGraphSimpleAction, StateGraphSimpleMessage, StateGraphProductNode, StateGraphDerivedNode, StateGraphProductResponseMessageDestination, StateGraphProductMessage, StateGraphGroupMessageDestination
 from harness.control_flow import ControlFlowBuilder, ControlFlowFormatter, ControlFlowMutexSet
-from harness.codegen.control_flow import HarnessControlFlowGoblintUserspaceCodegen
+from harness.codegen.control_flow import HarnessControlFlowKernelCodegen
 
 NUM_OF_CLIENTS = 2
 
@@ -100,7 +100,7 @@ control_flow_nodes = {
     for process in processes.processes
 }
 
-codegen = HarnessControlFlowGoblintUserspaceCodegen()
+codegen = HarnessControlFlowKernelCodegen()
 codegen.set_global_prologue('''
 #include "linux/compiler_types.h"
 #include "linux/kconfig.h"

@@ -47,7 +47,7 @@ void tty_port_init(struct tty_port *port) {
 }
 
 void tty_port_close(struct tty_port *port, struct tty_struct *tty, struct file *file) {
-  *port = (struct tty_port){0};
+  *tty = (struct tty_struct){0};
 }
 
 int tty_port_open(struct tty_port *port, struct tty_struct *tty, struct file *filp) {

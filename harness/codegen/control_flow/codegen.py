@@ -1,6 +1,6 @@
 import abc
 import io
-from typing import Dict, Iterable, Union, Any
+from typing import Dict, Iterable, Union, Any, List
 from harness.core import Process, StateGraphAction
 from harness.control_flow import ControlFlowNode, ControlFlowMutexSet, ControlFlowStatement, ControlFlowLabelledNode, ControlFlowLabel, ControlFlowSequence, ControlFlowBranchNode, ControlFlowGotoNode, ControlFlowSynchronization, ControlFlowMutex
 from harness.codegen.error import HarnessCodegenError
@@ -66,7 +66,9 @@ class HarnessControlFlowBaseCodegen(abc.ABC):
             yield from self._embed_multiline(self._global_prologue)
             yield ''
 
-        yield from self._declare_barrier(f'process_set_start_barrier')
+        yield from self._declare_init_barrier(processes.keys())
+        yield ''
+
         for mutex in mutexes.mutexes:
             yield '/* {} */'.format(
                 ', '.join(
@@ -85,7 +87,7 @@ class HarnessControlFlowBaseCodegen(abc.ABC):
                 yield from self._embed_multiline(self._parameterize_template(process, self._process_prologues[process]))
                 yield ''
             label_map = dict()
-            yield from self._format_node(process, mutexes, root_node, label_map)
+            yield from self._format_node(process, [other_process for other_process in processes.keys() if other_process != process], mutexes, root_node, label_map)
             yield ''
             yield from self._close_process_definition(process)
             yield ''
@@ -97,7 +99,9 @@ class HarnessControlFlowBaseCodegen(abc.ABC):
             yield from self._declare_process(process)
         yield ''
 
-        yield from self._initialize_barrier('process_set_start_barrier', len(processes))
+        yield from self._setup_init_barrier(processes.keys())
+        yield ''
+
         for mutex in mutexes.mutexes:
             yield from self._initialize_mutex(self._mutex_name(mutex))
         yield ''
@@ -112,21 +116,21 @@ class HarnessControlFlowBaseCodegen(abc.ABC):
 
         yield from self._close_main_definition()
 
-    def _format_node(self, process: Process, mutexes: ControlFlowMutexSet, node: ControlFlowNode, label_map: Dict[ControlFlowLabel, str]) -> IntOrStrIterable:
+    def _format_node(self, process: Process, other_processes: List[Process], mutexes: ControlFlowMutexSet, node: ControlFlowNode, label_map: Dict[ControlFlowLabel, str]) -> IntOrStrIterable:
         if node.as_statement():
             yield from self._format_statement(process, node.as_statement())
         elif node.as_labelled_node():
-            yield from self._format_labelled_node(process, mutexes, node.as_labelled_node(), label_map)
+            yield from self._format_labelled_node(process, other_processes, mutexes, node.as_labelled_node(), label_map)
         elif node.as_sequence():
-            yield from self._format_sequence_node(process, mutexes, node.as_sequence(), label_map)
+            yield from self._format_sequence_node(process, other_processes, mutexes, node.as_sequence(), label_map)
         elif node.as_branch():
-            yield from self._format_branch(process, mutexes, node.as_branch(), label_map)
+            yield from self._format_branch(process, other_processes, mutexes, node.as_branch(), label_map)
         elif node.as_goto():
             yield from self._format_goto(node.as_goto(), label_map)
         elif node.as_synchronization():
             yield from self._format_synchronization(node.as_synchronization())
         elif node.as_init_barrier():
-            yield from self._format_init_barrier()
+            yield from self._format_init_barrier(process, other_processes)
         else:
             raise HarnessCodegenError(f'Unknown control flow node type {type(node)}')
         
@@ -140,9 +144,9 @@ class HarnessControlFlowBaseCodegen(abc.ABC):
         if statement.state_graph_edge.action in self._actions:
             yield from self._embed_multiline(self._parameterize_template(process, self._actions[statement.state_graph_edge.action]))
 
-    def _format_labelled_node(self, process: Process, mutexes: ControlFlowMutexSet, labelled_node: ControlFlowLabelledNode, label_map: Dict[ControlFlowLabel, str]) -> IntOrStrIterable:
+    def _format_labelled_node(self, process: Process, other_processes: List[Process], mutexes: ControlFlowMutexSet, labelled_node: ControlFlowLabelledNode, label_map: Dict[ControlFlowLabel, str]) -> IntOrStrIterable:
         label_name = self._get_label(labelled_node.label, label_map)
-        entries = self._format_node(process, mutexes, labelled_node.body, label_map)
+        entries = self._format_node(process, other_processes, mutexes, labelled_node.body, label_map)
         first = next(entries, None)
         if first is None:
             yield f'{label_name} /* {labelled_node.label.node.mnemonic} */: ;'
@@ -153,21 +157,21 @@ class HarnessControlFlowBaseCodegen(abc.ABC):
             yield f'{label_name} /* {labelled_node.label.node.mnemonic} */: ;'
             yield from entries
 
-    def _format_sequence_node(self, process: Process, mutexes: ControlFlowMutexSet, sequence: ControlFlowSequence, label_map: Dict[ControlFlowLabel, str]) -> IntOrStrIterable:
+    def _format_sequence_node(self, process: Process, other_processes: List[Process], mutexes: ControlFlowMutexSet, sequence: ControlFlowSequence, label_map: Dict[ControlFlowLabel, str]) -> IntOrStrIterable:
         yield '{'
         yield 1
         for entry in sequence.sequence:
-            yield from self._format_node(process, mutexes, entry, label_map)
+            yield from self._format_node(process, other_processes, mutexes, entry, label_map)
         yield -1
         yield '}'
 
-    def _format_branch(self, process: Process, mutexes: ControlFlowMutexSet, branch: ControlFlowBranchNode, label_map: Dict[ControlFlowLabel, str]) -> IntOrStrIterable:
+    def _format_branch(self, process: Process, other_processes: List[Process], mutexes: ControlFlowMutexSet, branch: ControlFlowBranchNode, label_map: Dict[ControlFlowLabel, str]) -> IntOrStrIterable:
         branches = list(branch.branches)
         for index, branch_node in enumerate(branches):
             if index == 0:
                 yield f'if ({self._random(len(branches))} == 0) '
                 yield NoNewline
-            yield from self._format_node(process, mutexes, branch_node, label_map)
+            yield from self._format_node(process, other_processes, mutexes, branch_node, label_map)
             if index + 2 < len(branches):
                 yield NoNewline
                 yield f' else if ({self._random(len(branches) - index)} == 0) '
@@ -197,8 +201,8 @@ class HarnessControlFlowBaseCodegen(abc.ABC):
 
         yield from self._mutex_set_transition(lock, unlock)
 
-    def _format_init_barrier(self) -> IntOrStrIterable:
-        yield from self._barrier_wait('process_set_start_barrier')
+    def _format_init_barrier(self, process: Process, other_processes: Iterable[Process]) -> IntOrStrIterable:
+        yield from self._init_barrier_wait(process, other_processes)
 
     def _mutex_name(self, mutex: ControlFlowMutex) -> str:
         return f'mutex{mutex.identifier}'
@@ -210,7 +214,7 @@ class HarnessControlFlowBaseCodegen(abc.ABC):
     def _declare_mutex(self, mutex: str) -> IntOrStrIterable: pass
 
     @abc.abstractmethod
-    def _declare_barrier(self, barrier: str): pass
+    def _declare_init_barrier(self, processes: Iterable[Process]): pass
 
     @abc.abstractmethod
     def _open_process_definition(self, process: Process) -> IntOrStrIterable: pass
@@ -225,7 +229,7 @@ class HarnessControlFlowBaseCodegen(abc.ABC):
     def _close_main_definition(self) -> IntOrStrIterable: pass
 
     @abc.abstractmethod
-    def _initialize_barrier(self, barrier: str, threads: int): pass
+    def _setup_init_barrier(self, processes: Iterable[Process]): pass
 
     @abc.abstractmethod
     def _initialize_mutex(self, mutex: str): pass
@@ -249,7 +253,7 @@ class HarnessControlFlowBaseCodegen(abc.ABC):
     def _mutex_set_transition(self, lock: Iterable[ControlFlowMutex], unlock: Iterable[ControlFlowMutex]): pass
 
     @abc.abstractmethod
-    def _barrier_wait(self, barrier: str) -> IntOrStrIterable: pass
+    def _init_barrier_wait(self, process: Process, other_processes: Iterable[Process]) -> IntOrStrIterable: pass
 
     @abc.abstractmethod
     def _random(self, max: int) -> str: pass
@@ -264,8 +268,8 @@ class HarnessControlFlowUserspaceCodegen(HarnessControlFlowBaseCodegen):
     def _declare_mutex(self, mutex: str):
         yield f'static pthread_mutex_t {mutex};'
 
-    def _declare_barrier(self, barrier: str):
-        yield f'static pthread_barrier_t {barrier};'
+    def _declare_init_barrier(self, _: Iterable[Process]):
+        yield f'static pthread_barrier_t harness_init_barrier;'
 
     def _open_process_definition(self, process: Process):
         yield f'void *process_{process.mnemonic}(void *arg) {{'
@@ -289,8 +293,8 @@ class HarnessControlFlowUserspaceCodegen(HarnessControlFlowBaseCodegen):
     def _initialize_mutex(self, mutex: str):
         yield f'pthread_mutex_init(&{mutex}, NULL);'
 
-    def _initialize_barrier(self, barrier: str, threads: int):
-        yield f'pthread_barrier_init(&{barrier}, NULL, {threads});'
+    def _setup_init_barrier(self, processes: Iterable[Process]):
+        yield f'pthread_barrier_init(&harness_init_barrier, NULL, {len(list(processes))});'
 
     def _declare_process(self, process: Process):
         yield f'pthread_t process_thread_{process.mnemonic};'
@@ -307,8 +311,8 @@ class HarnessControlFlowUserspaceCodegen(HarnessControlFlowBaseCodegen):
     def _unlock_mutex(self, mutex: str):
         yield f'pthread_mutex_unlock(&{mutex});'
 
-    def _barrier_wait(self, barrier: str) -> IntOrStrIterable:
-        yield f'pthread_barrier_wait(&{barrier});'
+    def _init_barrier_wait(self, process: Process, other_processes: Iterable[Process]) -> IntOrStrIterable:
+        yield f'pthread_init_barrier_wait(&harness_init_barrier);'
 
     def _mutex_set_transition(self, lock: Iterable[ControlFlowMutex], unlock: Iterable[ControlFlowMutex]) -> IntOrStrIterable:
         lock_mtx = sorted(
@@ -332,7 +336,7 @@ class HarnessControlFlowUserspaceCodegen(HarnessControlFlowBaseCodegen):
     def _random(self, max: int) -> str:
         return f'(rand() % {max})'
     
-class HarnessControlFlowGoblintUserspaceCodegen(HarnessControlFlowUserspaceCodegen):
+class HarnessControlFlowKernelCodegen(HarnessControlFlowUserspaceCodegen):
     def _prologue(self):
         yield from self._embed_multiline('''
 extern _Atomic int RANDOM;
@@ -345,41 +349,22 @@ extern void __harness_mutex_lock(__harness_thread_mutex_t *);
 extern void __harness_mutex_unlock(__harness_thread_mutex_t *);
 ''')
 
-    def _declare_barrier(self, barrier: str):
-        yield f'static pthread_mutex_t {barrier}_mtx;'
-        yield f'static unsigned long {barrier}_epoch;'
-        yield f'static unsigned long {barrier}_waiting;'
-        yield f'static unsigned long {barrier}_size;'
-        yield ''
-        yield from self._embed_multiline('''
-static void %barrier%_wait() {
-  pthread_mutex_lock(&%barrier%_mtx);
-  const unsigned int epoch = %barrier%_epoch;
-  %barrier%_waiting++;
-  pthread_mutex_unlock(&%barrier%_mtx);
+    def _declare_init_barrier(self, processes: Iterable[Process]):
+        for process in processes:
+            yield f'static _Atomic unsigned int process_{process.mnemonic}_init_barrier;'
 
-  for (int wait = 1; wait;) {
-    pthread_mutex_lock(&%barrier%_mtx);
-    if (epoch != %barrier%_epoch) {
-      wait = 0;
-    } else if (%barrier%_waiting == %barrier%_size) {
-      %barrier%_epoch++;
-      %barrier%_waiting = 0;
-      wait = 0;
-    }
-    pthread_mutex_unlock(&%barrier%_mtx);
-  }
-}
-'''.replace('%barrier%', barrier))
-
-    def _initialize_barrier(self, barrier: str, threads: int):
-        yield f'pthread_mutex_init(&{barrier}_mtx, NULL);'
-        yield f'{barrier}_epoch = 0;'
-        yield f'{barrier}_waiting = 0;'
-        yield f'{barrier}_size = {threads};'
+    def _setup_init_barrier(self, processes: Iterable[Process]):
+        for process in processes:
+            yield f'process_{process.mnemonic}_init_barrier = 0;'
     
-    def _barrier_wait(self, barrier: str) -> IntOrStrIterable:
-        yield f'{barrier}_wait();'
+    def _init_barrier_wait(self, process: Process, other_processes: Iterable[Process]) -> IntOrStrIterable:
+        yield f'process_{process.mnemonic}_init_barrier = 1;'
+        yield 'while ({}); // Wait for other processes'.format(
+            ' || '.join(
+                f'!process_{other_process.mnemonic}_init_barrier'
+                for other_process in other_processes
+            )
+        )
     
     def _mutex_set_transition(self, lock: Iterable[ControlFlowMutex], unlock: Iterable[ControlFlowMutex]) -> IntOrStrIterable:
         lock_mtx = sorted(
