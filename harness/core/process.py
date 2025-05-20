@@ -119,7 +119,7 @@ class ProcessState:
             return False
         
         try:
-            for entry1, entry2 in zip(value.mailbox, self.mailbox, strict=True):
+            for entry1, entry2 in zip(sorted(value.mailbox, key=lambda entry: entry.origin.mnemonic), sorted(self.mailbox, key=lambda entry: entry.origin.mnemonic), strict=True):
                 if entry1 != entry2:
                     return False
         except ValueError:
@@ -132,7 +132,7 @@ class ProcessState:
     
     def __hash__(self) -> int:
         res = hash(self.state) * 37
-        for entry in self.mailbox:
+        for entry in sorted(self.mailbox, key=lambda entry: entry.origin.mnemonic):
             res = res * 13 + hash(entry)
         return res
 

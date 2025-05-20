@@ -31,31 +31,31 @@ static _Atomic unsigned int process_tty_client2_init_barrier;
 static _Atomic unsigned int process_tty_client3_init_barrier;
 static _Atomic unsigned int process_tty_driver_init_barrier;
 
-/* tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_active), tty_client1: tty_client_nodriver, tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_inactive), tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_inactive), tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_active) */
+/* tty_client1: tty_client_nodriver, tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_active), tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_active), tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_inactive), tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_inactive) */
 static __harness_mutex_t mutex0;
 
-/* tty_driver: tty_driver_unloaded, tty_driver: tty_driver_loading, tty_driver: tty_driver_unloading, tty_client2: tty_client_wait_connection */
+/* tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_active), tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_active), tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_inactive), tty_client2: tty_client_nodriver, tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_inactive) */
 static __harness_mutex_t mutex1;
 
-/* tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_inactive), tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_inactive), tty_driver: tty_driver_unloading, tty_driver: tty_driver_unloaded, tty_client2: tty_client_connected_state, tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_active), tty_driver: tty_driver_loading, tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_active), tty_client2: tty_client_disconnecting */
+/* tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_inactive), tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_inactive), tty_driver: tty_driver_loading, tty_client3: tty_client_connected_state, tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_inactive), tty_driver: tty_driver_unloading, tty_driver: tty_driver_unloaded, tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_inactive), tty_client3: tty_client_disconnecting */
 static __harness_mutex_t mutex2;
 
-/* tty_client3: tty_client_wait_connection, tty_driver: tty_driver_loading, tty_driver: tty_driver_unloading, tty_driver: tty_driver_unloaded */
+/* tty_client1: tty_client_disconnecting, tty_driver: tty_driver_loading, tty_client1: tty_client_connected_state, tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_active), tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_active), tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_inactive), tty_driver: tty_driver_unloading, tty_driver: tty_driver_unloaded, tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_inactive) */
 static __harness_mutex_t mutex3;
 
-/* tty_client3: tty_client_disconnecting, tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_inactive), tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_inactive), tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_inactive), tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_inactive), tty_driver: tty_driver_unloaded, tty_driver: tty_driver_unloading, tty_client3: tty_client_connected_state, tty_driver: tty_driver_loading */
+/* tty_driver: tty_driver_loading, tty_client2: tty_client_wait_connection, tty_driver: tty_driver_unloading, tty_driver: tty_driver_unloaded */
 static __harness_mutex_t mutex4;
 
-/* tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_inactive), tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_active), tty_client2: tty_client_nodriver, tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_inactive), tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_active) */
+/* tty_client1: tty_client_wait_connection, tty_driver: tty_driver_loading, tty_driver: tty_driver_unloading, tty_driver: tty_driver_unloaded */
 static __harness_mutex_t mutex5;
 
-/* tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_active), tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_inactive), tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_inactive), tty_driver: tty_driver_unloaded, tty_client1: tty_client_connected_state, tty_driver: tty_driver_unloading, tty_driver: tty_driver_loading, tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_active), tty_client1: tty_client_disconnecting */
+/* tty_driver: tty_driver_loading, tty_driver: tty_driver_unloading, tty_client3: tty_client_wait_connection, tty_driver: tty_driver_unloaded */
 static __harness_mutex_t mutex6;
 
-/* tty_client3: tty_client_nodriver, tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_active), tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_active), tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_active), tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_active) */
+/* tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_active), tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_active), tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_active), tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_active), tty_client3: tty_client_nodriver */
 static __harness_mutex_t mutex7;
 
-/* tty_driver: tty_driver_loading, tty_driver: tty_driver_unloading, tty_driver: tty_driver_unloaded, tty_client1: tty_client_wait_connection */
+/* tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_inactive), tty_driver: tty_driver_loading, tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_active), tty_driver: tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_active), tty_client2: tty_client_connected_state, tty_driver: tty_driver_unloading, tty_driver: tty_driver_unloaded, tty_driver: tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_inactive), tty_client2: tty_client_disconnecting */
 static __harness_mutex_t mutex8;
 
 
@@ -82,14 +82,14 @@ void *process_tty_client1(void *arg) {
         /* (tty_client_disconnected -> tty_client_disconnected) */
         goto label1; /* tty_client_disconnected */
       } else if ((_harness_random % 3) == 0) {
-        __harness_mutex_lock(&mutex8);
+        __harness_mutex_lock(&mutex5);
         /* (tty_client_disconnected -> tty_client_wait_connection) */
         label2 /* tty_client_wait_connection */: if ((_harness_random % 3) == 0) {
           /* (tty_client_wait_connection -> tty_client_wait_connection) */
           goto label2; /* tty_client_wait_connection */
         } else if ((_harness_random % 3) == 0) {
-          __harness_mutex_lock(&mutex6);
-          __harness_mutex_unlock(&mutex8);
+          __harness_mutex_lock(&mutex3);
+          __harness_mutex_unlock(&mutex5);
           /* (tty_client_wait_connection -> tty_client_connected_state on tty_driver_grant_connection) */
           
           registered_tty_driver->ops->open(&tty, &file);
@@ -109,19 +109,19 @@ void *process_tty_client1(void *arg) {
               /* (tty_client_disconnecting -> tty_client_disconnecting) */
               goto label4; /* tty_client_disconnecting */
             } else if ((_harness_random % 3) == 0) {
-              __harness_mutex_unlock(&mutex6);
+              __harness_mutex_unlock(&mutex3);
               /* (tty_client_disconnecting -> tty_client_disconnected) */
               goto label1; /* tty_client_disconnected */
             } else {
               __harness_mutex_lock(&mutex0);
-              __harness_mutex_unlock(&mutex6);
+              __harness_mutex_unlock(&mutex3);
               /* (tty_client_disconnecting -> tty_client_nodriver on tty_driver_unloading) */
               goto label0; /* tty_client_nodriver */
             }
           }
         } else {
           __harness_mutex_lock(&mutex0);
-          __harness_mutex_unlock(&mutex8);
+          __harness_mutex_unlock(&mutex5);
           /* (tty_client_wait_connection -> tty_client_nodriver on tty_driver_unloading) */
           goto label0; /* tty_client_nodriver */
         }
@@ -146,27 +146,27 @@ void *process_tty_client2(void *arg) {
       
   
   {
-    __harness_mutex_lock(&mutex5);
+    __harness_mutex_lock(&mutex1);
     process_tty_client2_init_barrier = 1;
     while (!process_tty_client1_init_barrier || !process_tty_client3_init_barrier || !process_tty_driver_init_barrier); // Wait for other processes
     label0 /* tty_client_nodriver */: if ((_harness_random % 2) == 0) {
       /* (tty_client_nodriver -> tty_client_nodriver) */
       goto label0; /* tty_client_nodriver */
     } else {
-      __harness_mutex_unlock(&mutex5);
+      __harness_mutex_unlock(&mutex1);
       /* (tty_client_nodriver -> tty_client_disconnected on tty_driver_loaded) */
       label1 /* tty_client_disconnected */: if ((_harness_random % 3) == 0) {
         /* (tty_client_disconnected -> tty_client_disconnected) */
         goto label1; /* tty_client_disconnected */
       } else if ((_harness_random % 3) == 0) {
-        __harness_mutex_lock(&mutex1);
+        __harness_mutex_lock(&mutex4);
         /* (tty_client_disconnected -> tty_client_wait_connection) */
         label2 /* tty_client_wait_connection */: if ((_harness_random % 3) == 0) {
           /* (tty_client_wait_connection -> tty_client_wait_connection) */
           goto label2; /* tty_client_wait_connection */
         } else if ((_harness_random % 3) == 0) {
-          __harness_mutex_lock(&mutex2);
-          __harness_mutex_unlock(&mutex1);
+          __harness_mutex_lock(&mutex8);
+          __harness_mutex_unlock(&mutex4);
           /* (tty_client_wait_connection -> tty_client_connected_state on tty_driver_grant_connection) */
           
           registered_tty_driver->ops->open(&tty, &file);
@@ -186,24 +186,24 @@ void *process_tty_client2(void *arg) {
               /* (tty_client_disconnecting -> tty_client_disconnecting) */
               goto label4; /* tty_client_disconnecting */
             } else if ((_harness_random % 3) == 0) {
-              __harness_mutex_unlock(&mutex2);
+              __harness_mutex_unlock(&mutex8);
               /* (tty_client_disconnecting -> tty_client_disconnected) */
               goto label1; /* tty_client_disconnected */
             } else {
-              __harness_mutex_lock(&mutex5);
-              __harness_mutex_unlock(&mutex2);
+              __harness_mutex_lock(&mutex1);
+              __harness_mutex_unlock(&mutex8);
               /* (tty_client_disconnecting -> tty_client_nodriver on tty_driver_unloading) */
               goto label0; /* tty_client_nodriver */
             }
           }
         } else {
-          __harness_mutex_lock(&mutex5);
-          __harness_mutex_unlock(&mutex1);
+          __harness_mutex_lock(&mutex1);
+          __harness_mutex_unlock(&mutex4);
           /* (tty_client_wait_connection -> tty_client_nodriver on tty_driver_unloading) */
           goto label0; /* tty_client_nodriver */
         }
       } else {
-        __harness_mutex_lock(&mutex5);
+        __harness_mutex_lock(&mutex1);
         /* (tty_client_disconnected -> tty_client_nodriver on tty_driver_unloading) */
         goto label0; /* tty_client_nodriver */
       }
@@ -236,14 +236,14 @@ void *process_tty_client3(void *arg) {
         /* (tty_client_disconnected -> tty_client_disconnected) */
         goto label1; /* tty_client_disconnected */
       } else if ((_harness_random % 3) == 0) {
-        __harness_mutex_lock(&mutex3);
+        __harness_mutex_lock(&mutex6);
         /* (tty_client_disconnected -> tty_client_wait_connection) */
         label2 /* tty_client_wait_connection */: if ((_harness_random % 3) == 0) {
           /* (tty_client_wait_connection -> tty_client_wait_connection) */
           goto label2; /* tty_client_wait_connection */
         } else if ((_harness_random % 3) == 0) {
-          __harness_mutex_lock(&mutex4);
-          __harness_mutex_unlock(&mutex3);
+          __harness_mutex_lock(&mutex2);
+          __harness_mutex_unlock(&mutex6);
           /* (tty_client_wait_connection -> tty_client_connected_state on tty_driver_grant_connection) */
           
           registered_tty_driver->ops->open(&tty, &file);
@@ -263,19 +263,19 @@ void *process_tty_client3(void *arg) {
               /* (tty_client_disconnecting -> tty_client_disconnecting) */
               goto label4; /* tty_client_disconnecting */
             } else if ((_harness_random % 3) == 0) {
-              __harness_mutex_unlock(&mutex4);
+              __harness_mutex_unlock(&mutex2);
               /* (tty_client_disconnecting -> tty_client_disconnected) */
               goto label1; /* tty_client_disconnected */
             } else {
               __harness_mutex_lock(&mutex7);
-              __harness_mutex_unlock(&mutex4);
+              __harness_mutex_unlock(&mutex2);
               /* (tty_client_disconnecting -> tty_client_nodriver on tty_driver_unloading) */
               goto label0; /* tty_client_nodriver */
             }
           }
         } else {
           __harness_mutex_lock(&mutex7);
-          __harness_mutex_unlock(&mutex3);
+          __harness_mutex_unlock(&mutex6);
           /* (tty_client_wait_connection -> tty_client_nodriver on tty_driver_unloading) */
           goto label0; /* tty_client_nodriver */
         }
@@ -294,10 +294,10 @@ void *process_tty_driver(void *arg) {
   (void) arg; // Unused
   
   {
-    __harness_mutex_lock(&mutex1);
     __harness_mutex_lock(&mutex2);
     __harness_mutex_lock(&mutex3);
     __harness_mutex_lock(&mutex4);
+    __harness_mutex_lock(&mutex5);
     __harness_mutex_lock(&mutex6);
     __harness_mutex_lock(&mutex8);
     process_tty_driver_init_barrier = 1;
@@ -314,14 +314,14 @@ void *process_tty_driver(void *arg) {
         /* (tty_driver_loading -> tty_driver_loading) */
         goto label1; /* tty_driver_loading */
       } else {
-        __harness_mutex_unlock(&mutex8);
-        __harness_mutex_unlock(&mutex3);
-        __harness_mutex_unlock(&mutex1);
+        __harness_mutex_unlock(&mutex6);
+        __harness_mutex_unlock(&mutex5);
+        __harness_mutex_unlock(&mutex4);
         /* (tty_driver_loading -> tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_inactive)) */
         label2 /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_inactive) */: if ((_harness_random % 4) == 0) {
-          __harness_mutex_lock(&mutex1);
-          __harness_mutex_lock(&mutex3);
-          __harness_mutex_lock(&mutex8);
+          __harness_mutex_lock(&mutex4);
+          __harness_mutex_lock(&mutex5);
+          __harness_mutex_lock(&mutex6);
           /* (tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_inactive) -> tty_driver_unloading) */
           label3 /* tty_driver_unloading */: if ((_harness_random % 2) == 0) {
             /* (tty_driver_unloading -> tty_driver_unloading) */
@@ -335,120 +335,120 @@ void *process_tty_driver(void *arg) {
           }
         } else if ((_harness_random % 4) == 0) {
           __harness_mutex_lock(&mutex0);
-          __harness_mutex_unlock(&mutex6);
+          __harness_mutex_unlock(&mutex3);
           /* (tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_inactive) -> tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_inactive) on (tty_client_request_connection, _, _)) */
           label4 /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_inactive) */: if ((_harness_random % 3) == 0) {
-            __harness_mutex_lock(&mutex6);
+            __harness_mutex_lock(&mutex3);
             __harness_mutex_unlock(&mutex0);
             /* (tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_inactive) -> tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_inactive) on (tty_client_disconnect, _, _)) */
             goto label2; /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_inactive) */
           } else if ((_harness_random % 3) == 0) {
-            __harness_mutex_lock(&mutex5);
-            __harness_mutex_unlock(&mutex2);
+            __harness_mutex_lock(&mutex1);
+            __harness_mutex_unlock(&mutex8);
             /* (tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_inactive) -> tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_inactive) on (_, tty_client_request_connection, _)) */
             goto label5; /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_inactive) */
           } else {
             __harness_mutex_lock(&mutex7);
-            __harness_mutex_unlock(&mutex4);
+            __harness_mutex_unlock(&mutex2);
             /* (tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_inactive) -> tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_active) on (_, _, tty_client_request_connection)) */
             goto label6; /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_active) */
           }
         } else if ((_harness_random % 3) == 0) {
-          __harness_mutex_lock(&mutex5);
-          __harness_mutex_unlock(&mutex2);
+          __harness_mutex_lock(&mutex1);
+          __harness_mutex_unlock(&mutex8);
           /* (tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_inactive) -> tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_inactive) on (_, tty_client_request_connection, _)) */
           label7 /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_inactive) */: if ((_harness_random % 3) == 0) {
             __harness_mutex_lock(&mutex0);
-            __harness_mutex_unlock(&mutex6);
+            __harness_mutex_unlock(&mutex3);
             /* (tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_inactive) -> tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_inactive) on (tty_client_request_connection, _, _)) */
             label5 /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_inactive) */: if ((_harness_random % 3) == 0) {
-              __harness_mutex_lock(&mutex6);
+              __harness_mutex_lock(&mutex3);
               __harness_mutex_unlock(&mutex0);
               /* (tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_inactive) -> tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_inactive) on (tty_client_disconnect, _, _)) */
               goto label7; /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_inactive) */
             } else if ((_harness_random % 3) == 0) {
-              __harness_mutex_lock(&mutex2);
-              __harness_mutex_unlock(&mutex5);
+              __harness_mutex_lock(&mutex8);
+              __harness_mutex_unlock(&mutex1);
               /* (tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_inactive) -> tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_inactive) on (_, tty_client_disconnect, _)) */
               goto label4; /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_inactive) */
             } else {
               __harness_mutex_lock(&mutex7);
-              __harness_mutex_unlock(&mutex4);
+              __harness_mutex_unlock(&mutex2);
               /* (tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_inactive) -> tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_active) on (_, _, tty_client_request_connection)) */
               label8 /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_active) */: if ((_harness_random % 3) == 0) {
-                __harness_mutex_lock(&mutex6);
+                __harness_mutex_lock(&mutex3);
                 __harness_mutex_unlock(&mutex0);
                 /* (tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_active) -> tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_active) on (tty_client_disconnect, _, _)) */
                 goto label9; /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_active) */
               } else if ((_harness_random % 3) == 0) {
-                __harness_mutex_lock(&mutex2);
-                __harness_mutex_unlock(&mutex5);
+                __harness_mutex_lock(&mutex8);
+                __harness_mutex_unlock(&mutex1);
                 /* (tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_active) -> tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_active) on (_, tty_client_disconnect, _)) */
                 label6 /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_active) */: if ((_harness_random % 3) == 0) {
-                  __harness_mutex_lock(&mutex6);
+                  __harness_mutex_lock(&mutex3);
                   __harness_mutex_unlock(&mutex0);
                   /* (tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_active) -> tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_active) on (tty_client_disconnect, _, _)) */
                   goto label10; /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_active) */
                 } else if ((_harness_random % 3) == 0) {
-                  __harness_mutex_lock(&mutex5);
-                  __harness_mutex_unlock(&mutex2);
+                  __harness_mutex_lock(&mutex1);
+                  __harness_mutex_unlock(&mutex8);
                   /* (tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_active) -> tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_active) on (_, tty_client_request_connection, _)) */
                   goto label8; /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_active) */
                 } else {
-                  __harness_mutex_lock(&mutex4);
+                  __harness_mutex_lock(&mutex2);
                   __harness_mutex_unlock(&mutex7);
                   /* (tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_active) -> tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_inactive) on (_, _, tty_client_disconnect)) */
                   goto label4; /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_inactive) */
                 }
               } else {
-                __harness_mutex_lock(&mutex4);
+                __harness_mutex_lock(&mutex2);
                 __harness_mutex_unlock(&mutex7);
                 /* (tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_active) -> tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_inactive) on (_, _, tty_client_disconnect)) */
                 goto label5; /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_inactive) */
               }
             }
           } else if ((_harness_random % 3) == 0) {
-            __harness_mutex_lock(&mutex2);
-            __harness_mutex_unlock(&mutex5);
+            __harness_mutex_lock(&mutex8);
+            __harness_mutex_unlock(&mutex1);
             /* (tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_inactive) -> tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_inactive) on (_, tty_client_disconnect, _)) */
             goto label2; /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_inactive) */
           } else {
             __harness_mutex_lock(&mutex7);
-            __harness_mutex_unlock(&mutex4);
+            __harness_mutex_unlock(&mutex2);
             /* (tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_inactive) -> tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_active) on (_, _, tty_client_request_connection)) */
             goto label9; /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_active) */
           }
         } else {
           __harness_mutex_lock(&mutex7);
-          __harness_mutex_unlock(&mutex4);
+          __harness_mutex_unlock(&mutex2);
           /* (tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_inactive) -> tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_active) on (_, _, tty_client_request_connection)) */
           label10 /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_active) */: if ((_harness_random % 3) == 0) {
             __harness_mutex_lock(&mutex0);
-            __harness_mutex_unlock(&mutex6);
+            __harness_mutex_unlock(&mutex3);
             /* (tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_active) -> tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_active) on (tty_client_request_connection, _, _)) */
             goto label6; /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_inactive, tty_driver_client_active) */
           } else if ((_harness_random % 3) == 0) {
-            __harness_mutex_lock(&mutex5);
-            __harness_mutex_unlock(&mutex2);
+            __harness_mutex_lock(&mutex1);
+            __harness_mutex_unlock(&mutex8);
             /* (tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_active) -> tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_active) on (_, tty_client_request_connection, _)) */
             label9 /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_active) */: if ((_harness_random % 3) == 0) {
               __harness_mutex_lock(&mutex0);
-              __harness_mutex_unlock(&mutex6);
+              __harness_mutex_unlock(&mutex3);
               /* (tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_active) -> tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_active) on (tty_client_request_connection, _, _)) */
               goto label8; /* tty_driver_loaded (tty_driver_client_active, tty_driver_client_active, tty_driver_client_active) */
             } else if ((_harness_random % 3) == 0) {
-              __harness_mutex_lock(&mutex2);
-              __harness_mutex_unlock(&mutex5);
+              __harness_mutex_lock(&mutex8);
+              __harness_mutex_unlock(&mutex1);
               /* (tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_active) -> tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_active) on (_, tty_client_disconnect, _)) */
               goto label10; /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_active) */
             } else {
-              __harness_mutex_lock(&mutex4);
+              __harness_mutex_lock(&mutex2);
               __harness_mutex_unlock(&mutex7);
               /* (tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_active) -> tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_inactive) on (_, _, tty_client_disconnect)) */
               goto label7; /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_active, tty_driver_client_inactive) */
             }
           } else {
-            __harness_mutex_lock(&mutex4);
+            __harness_mutex_lock(&mutex2);
             __harness_mutex_unlock(&mutex7);
             /* (tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_active) -> tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_inactive) on (_, _, tty_client_disconnect)) */
             goto label2; /* tty_driver_loaded (tty_driver_client_inactive, tty_driver_client_inactive, tty_driver_client_inactive) */

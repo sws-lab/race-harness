@@ -99,3 +99,6 @@ control_flow_nodes = {
     process: ControlFlowBuilder(process.entry_node).control_flow(process, mutex_set)
     for process in processes.processes
 }
+
+if __name__ == '__main__':
+    print(len(state_space))
