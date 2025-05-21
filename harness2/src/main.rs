@@ -1,33 +1,10 @@
-use harness::{core::{process::ProcessSet, state_machine::{StateMachineContext, StateMachineMessageDestination, StateMachineMessageParticipantID}}, entities::product_node::StateMachineProductNodeBuilder};
+use harness::{core::{format::ProcessSetStateSpaceFormatter, mutex::{format::MutualExclusionSegmentFormatter, mutex::ProcessSetMutualExclusion}, process::ProcessSet, state_machine::{StateMachineContext, StateMachineMessageDestination, StateMachineMessageParticipantID}}, entities::product_node::StateMachineProductNodeBuilder};
 
 pub mod harness;
 
-// fn print_process_set_state(context: &StateMachineContext, process_set: &ProcessSet, state: &ProcessSetState) {
-//     println!("{{");
-//     for process in process_set.get_processes() {
-//         print!("\t{}: {}", process_set.get_process_mnemonic(process).unwrap(), context.get_node_mnemonic(state.get_process_node(process).unwrap()).unwrap());
-//         let mut empty_inbox = true;
-//         for (sender, message) in state.get_process_inbox(process).unwrap() {
-//             if empty_inbox {
-//                 print!(" [");
-//             } else {
-//                 print!("; ")
-//             }
-//             empty_inbox = false;
-
-//             print!("{} from {}", context.get_message_mnemonic(message).unwrap(), process_set.get_process_mnemonic(sender).unwrap());
-//         }
-//         if !empty_inbox {
-//             print!("]");
-//         }
-//         print!("\n");
-//     }
-//     println!("}}");
-// }
-
 fn main() {
     let mut context = StateMachineContext::new();
-    const NUM_OF_CLIENTS: usize = 3;
+    const NUM_OF_CLIENTS: usize = 2;
 
     let tty_driver_loaded_msg = context.new_message("tty_driver_loaded").unwrap();
     let tty_client_request_connection_msg = context.new_message("tty_client_request_connection").unwrap();
@@ -114,4 +91,11 @@ fn main() {
     
     let state_space = process_set.get_state_space(&context).unwrap();
     println!("{}", state_space.len());
+    println!("{}", ProcessSetStateSpaceFormatter::new(&context, &process_set, &state_space).unwrap());
+
+    println!("--------------------------------------");
+    let mutual_exclusion = ProcessSetMutualExclusion::new(&context, &process_set, &state_space).unwrap();
+    for segment in mutual_exclusion.iter() {
+        println!("{}", MutualExclusionSegmentFormatter::new(&context, &process_set, segment).unwrap());
+    }
 }

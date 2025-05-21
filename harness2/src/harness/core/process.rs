@@ -29,6 +29,10 @@ impl ProcessSet {
         }
     }
 
+    pub fn iter(&self) -> impl Iterator<Item = ProcessID> {
+        self.processes.keys().map(| process_id | *process_id)
+    }
+
     pub fn new_process(&mut self, mnemonic: String, entry_node: StateMachineNodeID) -> ProcessID {
         let process_id = ProcessID(self.processes.len() as u64);
         let process = Process {
