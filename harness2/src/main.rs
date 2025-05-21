@@ -1,4 +1,6 @@
-use harness::{core::{format::ProcessSetStateSpaceFormatter, mutex::{format::MutualExclusionSegmentFormatter, mutex::ProcessSetMutualExclusion}, process::ProcessSet, state_machine::{StateMachineContext, StateMachineMessageDestination, StateMachineMessageParticipantID}}, entities::product_node::StateMachineProductNodeBuilder};
+use std::collections::HashMap;
+
+use harness::{control_flow::{builder::ControlFlowBuilder, mutex::ControlFlowMutexSet}, core::{format::ProcessSetStateSpaceFormatter, mutex::{format::MutualExclusionSegmentFormatter, mutex::ProcessSetMutualExclusion}, process::ProcessSet, state_machine::{StateMachineContext, StateMachineMessageDestination, StateMachineMessageParticipantID}}, entities::product_node::StateMachineProductNodeBuilder};
 
 pub mod harness;
 
@@ -98,4 +100,13 @@ fn main() {
     for segment in mutual_exclusion.iter() {
         println!("{}", MutualExclusionSegmentFormatter::new(&context, &process_set, segment).unwrap());
     }
+
+    let mutex_set = ControlFlowMutexSet::new(mutual_exclusion.iter());
+    let control_flow_nodes = process_set.get_processes()
+        .map(| process | {
+            let root = process_set.get_process_entry_node(process).unwrap();
+            let node = ControlFlowBuilder::new(&context, root).unwrap().build(&context, &process_set, process, &mutex_set).unwrap();
+            println!("{:?}", node);
+            (process, node)
+        }).collect::<HashMap<_, _>>();
 }
