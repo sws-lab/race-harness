@@ -6,7 +6,7 @@ use super::{error::HarnessError, process::{ProcessID, ProcessSet}, state_machine
 struct ProcessState {
     process_id: ProcessID,
     node: StateMachineNodeID,
-    inbox: BTreeMap<ProcessID, StateMachineMessageID>
+    inbox: BTreeMap<ProcessID, StateMachineMessageID>,
 }
 
 #[derive(Clone, Debug, Eq)]
@@ -205,7 +205,7 @@ impl ProcessSetState {
                     }
                     let message = process_set.map_inbound_message(receiver_id, process_state.process_id, envelope.get_message())?;
                     new_process_set_state.processes.get_mut(&receiver_id)
-                        .ok_or(HarnessError("TODO".into()))?
+                        .ok_or(HarnessError::new("Unable to find receiver process for a message"))?
                         .inbox.insert(process_state.process_id, message);
                 }
                 if blocks_on_messaging {

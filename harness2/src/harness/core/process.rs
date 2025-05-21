@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use super::{process_state::{ProcessSetState, ProcessSetStateSpace}, error::HarnessError, state_machine::{StateMachineContext, StateMachineEdgeID, StateMachineMessageEnvelope, StateMachineMessageID, StateMachineMessageParticipantID, StateMachineNodeID}};
 
@@ -9,7 +9,7 @@ struct Process {
     mnemonic: String,
     entry_node: StateMachineNodeID,
     inbound_message_mappings: Vec<Box<dyn Fn(ProcessID, StateMachineMessageID) -> Option<StateMachineMessageID> + 'static>>,
-    outbound_message_mappings: Vec<Box<dyn Fn(StateMachineEdgeID, StateMachineMessageEnvelope) -> Option<StateMachineMessageEnvelope> + 'static>>
+    outbound_message_mappings: Vec<Box<dyn Fn(StateMachineEdgeID, &StateMachineMessageEnvelope) -> Option<StateMachineMessageEnvelope> + 'static>>
 }
 
 pub struct ProcessSet {
@@ -43,14 +43,14 @@ impl ProcessSet {
 
     pub fn new_inbound_message_mapping(&mut self, process_id: ProcessID, mapping: impl Fn(ProcessID, StateMachineMessageID) -> Option<StateMachineMessageID> + 'static) -> Result<(), HarnessError> {
         self.processes.get_mut(&process_id)
-            .ok_or(HarnessError("TODO".into()))?
+            .ok_or(HarnessError::new("Unable to find process to add inbound message mapping"))?
             .inbound_message_mappings.push(Box::new(mapping));
         Ok(())
     }
 
-    pub fn new_outbound_message_mapping(&mut self, process_id: ProcessID, mapping: impl Fn(StateMachineEdgeID, StateMachineMessageEnvelope) -> Option<StateMachineMessageEnvelope> + 'static) -> Result<(), HarnessError> {
+    pub fn new_outbound_message_mapping(&mut self, process_id: ProcessID, mapping: impl Fn(StateMachineEdgeID, &StateMachineMessageEnvelope) -> Option<StateMachineMessageEnvelope> + 'static) -> Result<(), HarnessError> {
         self.processes.get_mut(&process_id)
-            .ok_or(HarnessError("TODO".into()))?
+            .ok_or(HarnessError::new("Unable to find process to add outbound message mapping"))?
             .outbound_message_mappings.push(Box::new(mapping));
         Ok(())
     }
@@ -68,7 +68,7 @@ impl ProcessSet {
     }
 
     pub fn map_inbound_message(&self, receiver_id: ProcessID, sender_id: ProcessID, message: StateMachineMessageID) -> Result<StateMachineMessageID, HarnessError> {
-        let mappings = &self.processes.get(&receiver_id).ok_or(HarnessError("TODO".into()))?.inbound_message_mappings;
+        let mappings = &self.processes.get(&receiver_id).ok_or(HarnessError::new("Unable to find a process to map inbound message"))?.inbound_message_mappings;
         for mapping in mappings {
             match mapping(sender_id, message) {
                 Some(msg) => return Ok(msg),
@@ -79,9 +79,9 @@ impl ProcessSet {
     }
 
     pub fn map_outbound_message(&self, sender_id: ProcessID, origin_edge: StateMachineEdgeID, envelope: &StateMachineMessageEnvelope) -> Result<StateMachineMessageEnvelope, HarnessError> {
-        let mappings = &self.processes.get(&sender_id).ok_or(HarnessError("TODO".into()))?.outbound_message_mappings;
+        let mappings = &self.processes.get(&sender_id).ok_or(HarnessError::new("Unable to find a process to map outbound message"))?.outbound_message_mappings;
         for mapping in mappings {
-            match mapping(origin_edge, envelope.clone()) {
+            match mapping(origin_edge, &envelope) {
                 Some(env) => return Ok(env),
                 None => ()
             }

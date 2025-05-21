@@ -30,7 +30,7 @@ impl ProductEntry {
             if i > 0 {
                 mnemonic.push_str(", ");
             }
-            mnemonic.push_str(context.get_node_mnemonic(*subnode).ok_or(HarnessError("TODO".into()))?);
+            mnemonic.push_str(context.get_node_mnemonic(*subnode).ok_or(HarnessError::new("Unable to find subnode to build product node mnemonic"))?);
         }
         mnemonic.push(')');
         Ok(mnemonic)
@@ -100,11 +100,11 @@ impl StateMachineProductNodeBuilder {
             for i in 0..self.count() {
                 inbound_product_messages.entry(i).or_insert(HashMap::new());
                 let edges = context.get_edges_from(*entry.0.get(i).unwrap())
-                    .ok_or(HarnessError("TODO".into()))?
+                    .ok_or(HarnessError::new("Unable to find edges coming from node for product node construction"))?
                     .collect::<Vec<_>>();
                 for edge in edges {
                     let mut new_content = entry.0.clone();
-                    new_content[i] = context.get_edge_target(edge).ok_or(HarnessError("TODO".into()))?;
+                    new_content[i] = context.get_edge_target(edge).ok_or(HarnessError::new("Unable to find edge target for product node construction"))?;
                     let next_entry: ProductEntry = new_content.into();
                     let next_entry_product_node = match product_subnodes.get(&next_entry) {
                         Some(product_node) => *product_node,
@@ -120,7 +120,7 @@ impl StateMachineProductNodeBuilder {
                             let product_msg = match inbound_product_messages.get(&i).unwrap().get(&msg){
                                 Some(product_msg) => *product_msg,
                                 None => {
-                                    let product_msg = context.new_message(StateMachineProductNodeBuilder::get_product_message_mnemonic(i, self.count(), context.get_message_mnemonic(msg).ok_or(HarnessError("TODO".into()))?))?;
+                                    let product_msg = context.new_message(StateMachineProductNodeBuilder::get_product_message_mnemonic(i, self.count(), context.get_message_mnemonic(msg).ok_or(HarnessError::new("Unable to find message mnemonic for product message construction"))?))?;
                                     inbound_product_messages.get_mut(&i).expect("Expected inbound product message map to exist")
                                         .insert(msg, product_msg);
                                     product_msg
@@ -160,7 +160,7 @@ impl StateMachineProductNode {
         let participants = participants.collect::<Vec<StateMachineMessageParticipantID>>();
         for i in 0..participants.len() {
             if !self.inbound_product_messages.contains_key(&i) {
-                return Err(HarnessError("TODO".into()));
+                return Err(HarnessError::new("Unable to match product node inbound messages to provided participant list"));
             }
         }
 
@@ -181,16 +181,16 @@ impl StateMachineProductNode {
         })
     }
 
-    pub fn get_outbound_message_mapping(&self, participants: impl Iterator<Item = StateMachineMessageParticipantID>) -> Result<impl Fn(StateMachineEdgeID, StateMachineMessageEnvelope) -> Option<StateMachineMessageEnvelope> + 'static, HarnessError> {
+    pub fn get_outbound_message_mapping(&self, participants: impl Iterator<Item = StateMachineMessageParticipantID>) -> Result<impl for<'a> Fn(StateMachineEdgeID, &'a StateMachineMessageEnvelope) -> Option<StateMachineMessageEnvelope> + 'static, HarnessError> {
         let participants = participants.collect::<Vec<StateMachineMessageParticipantID>>();
         let outbound_response_messages = self.outbound_response_messages.clone();
         for &participant_idx in outbound_response_messages.values() {
             if participant_idx >= participants.len() {
-                return Err(HarnessError("TODO".into()));
+                return Err(HarnessError::new("Unable to match product node outbound messages to provided participant list"));
             }
         }
     
-        Ok(move | edge, envelope: StateMachineMessageEnvelope | {
+        Ok(move | edge, envelope: &StateMachineMessageEnvelope | {
             match envelope.get_destination() {
                 StateMachineMessageDestination::Response => if let Some(&participant_idx) = outbound_response_messages.get(&edge) {
                     let participant = participants.get(participant_idx).expect("Expected participant to exist");

@@ -57,24 +57,12 @@ pub struct StateMachineContext {
     reachable_nodes: RefCell<HashMap<StateMachineNodeID, HashSet<StateMachineNodeID>>>
 }
 
-impl From<String> for EntityData {
-    fn from(value: String) -> Self {
-        EntityData { mnemonic: value }
-    }
-}
-
-impl From<String> for ActionData {
-    fn from(value: String) -> Self {
-        ActionData { mnemonic: value, envelopes: Vec::new() }
-    }
-}
-
 impl StateMachineMessageDestination {
     pub fn matches(&self, participant: StateMachineMessageParticipantID) -> Result<bool, HarnessError> {
         match self {
             Self::Unicast(part) if *part == participant => Ok(true),
             Self::Multicast(parts) if parts.contains(&participant) => Ok(true),
-            Self::Response => Err(HarnessError("TODO".into())),
+            Self::Response => Err(HarnessError::new("Unable to find match participant identifier against response-type destination")),
             _ => Ok(false)
         }
     }
@@ -110,39 +98,42 @@ impl<'a> StateMachineContext {
         }
     }
 
-    pub fn new_message(&mut self, mnemonic: String) -> Result<StateMachineMessageID, HarnessError> {
+    pub fn new_message<T>(&mut self, mnemonic: T) -> Result<StateMachineMessageID, HarnessError>
+        where T: Into<String> {
         let msg = StateMachineMessageID(self.messages.len() as u64);
-        self.messages.insert(msg, mnemonic.into());
+        self.messages.insert(msg, EntityData { mnemonic: mnemonic.into() });
         Ok(msg)
     }
 
-    pub fn new_node(&mut self, mnemonic: String) -> Result<StateMachineNodeID, HarnessError> {
+    pub fn new_node<T>(&mut self, mnemonic: T) -> Result<StateMachineNodeID, HarnessError>
+        where T: Into<String> {
         let node = StateMachineNodeID(self.nodes.len() as u64);
-        self.nodes.insert(node, mnemonic.into());
+        self.nodes.insert(node, EntityData { mnemonic: mnemonic.into() });
         self.forward_edges.insert(node, HashSet::new());
         self.reverse_edges.insert(node, HashSet::new());
         Ok(node)
     }
 
-    pub fn new_action(&mut self, mnemonic: String) -> Result<StateMachineActionID, HarnessError> {
+    pub fn new_action<T>(&mut self, mnemonic: T) -> Result<StateMachineActionID, HarnessError>
+        where T: Into<String> {
         let action = StateMachineActionID(self.actions.len() as u64);
-        self.actions.insert(action, mnemonic.into());
+        self.actions.insert(action, ActionData { mnemonic: mnemonic.into(), envelopes: Vec::new() });
         Ok(action)
     }
 
     pub fn new_edge(&mut self, source: StateMachineNodeID, target: StateMachineNodeID, trigger: Option<StateMachineMessageID>, action: Option<StateMachineActionID>) -> Result<StateMachineEdgeID, HarnessError> {
         if !self.nodes.contains_key(&source) || !self.nodes.contains_key(&target) {
-            return Err(HarnessError("TODO".into()));
+            return Err(HarnessError::new("Unable to find edge source/target nodes"));
         }
 
         match trigger {
             Some(message) if !self.messages.contains_key(&message) =>
-                return Err(HarnessError("TODO".into())),
+                return Err(HarnessError::new("Unable to find trigger message for an edge")),
             _ => ()
         };
         match action {
             Some(action) if !self.actions.contains_key(&action) =>
-                return Err(HarnessError("TODO".into())),
+                return Err(HarnessError::new("Unable to find action for an edge")),
             _ => ()
         }
 
@@ -156,10 +147,10 @@ impl<'a> StateMachineContext {
 
         self.edges.insert(edge_id, edge);
         self.forward_edges.get_mut(&source)
-            .ok_or(HarnessError("TODO".into()))?
+            .ok_or(HarnessError::new("Unable to find forward edge set for edge source node"))?
             .insert(edge_id);
         self.reverse_edges.get_mut(&target)
-            .ok_or(HarnessError("TODO".into()))?
+            .ok_or(HarnessError::new("Unable to find reverse edge set for edge target node"))?
             .insert(edge_id);
         Ok(edge_id)
     }
@@ -173,7 +164,7 @@ impl<'a> StateMachineContext {
                 });
                 Ok(())
             },
-            None => Err(HarnessError("TODO".into()))
+            None => Err(HarnessError::new("Unable to find action to add an envelope"))
         }
     }
 
@@ -228,7 +219,7 @@ impl<'a> StateMachineContext {
         };
 
         if !self.nodes.contains_key(&root) {
-            return Err(HarnessError("TODO".into()));
+            return Err(HarnessError::new("Unable to find root node for reachability analysis"));
         }
 
         let mut reachable = HashSet::new();

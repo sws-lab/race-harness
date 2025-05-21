@@ -1,4 +1,4 @@
-use harness::{core::{process::ProcessSet, process_state::ProcessSetState, state_machine::{StateMachineContext, StateMachineMessageDestination, StateMachineMessageParticipantID}}, entities::product_node::StateMachineProductNodeBuilder};
+use harness::{core::{process::ProcessSet, state_machine::{StateMachineContext, StateMachineMessageDestination, StateMachineMessageParticipantID}}, entities::product_node::StateMachineProductNodeBuilder};
 
 pub mod harness;
 
@@ -26,57 +26,56 @@ pub mod harness;
 // }
 
 fn main() {
-    let mut context = harness::core::state_machine::StateMachineContext::new();
+    let mut context = StateMachineContext::new();
     const NUM_OF_CLIENTS: usize = 3;
 
-    let tty_driver_loaded_msg = context.new_message("tty_driver_loaded".into()).unwrap();
-    let tty_client_request_connection_msg = context.new_message("tty_client_request_connection".into()).unwrap();
-    let tty_driver_grant_connection_msg = context.new_message("tty_client_grant_connection".into()).unwrap();
-    let tty_client_disconnect_msg = context.new_message("tty_client_disconnect".into()).unwrap();
-    let tty_driver_unloading_msg = context.new_message("tty_driver_unloading".into()).unwrap();
+    let tty_driver_loaded_msg = context.new_message("tty_driver_loaded").unwrap();
+    let tty_client_request_connection_msg = context.new_message("tty_client_request_connection").unwrap();
+    let tty_driver_grant_connection_msg = context.new_message("tty_client_grant_connection").unwrap();
+    let tty_client_disconnect_msg = context.new_message("tty_client_disconnect").unwrap();
+    let tty_driver_unloading_msg = context.new_message("tty_driver_unloading").unwrap();
 
-    let tty_driver_load_action = context.new_action("tty_driver_load".into()).unwrap();
-    let tty_driver_loaded_action = context.new_action("tty_driver_loaded".into()).unwrap();
-    let tty_client_request_connection_action = context.new_action("tty_client_request_connection".into()).unwrap();
-    let tty_driver_grant_connection_action = context.new_action("tty_driver_grant_connection".into()).unwrap();
-    let tty_client_disconnect_action = context.new_action("tty_client_disconnect".into()).unwrap();
-    let tty_client_disconnected_action = context.new_action("tty_client_disconnected".into()).unwrap();
-    let tty_client_acquire_connection_action = context.new_action("tty_client_acquire_connection".into()).unwrap();
-    let tty_client_use_connection_action = context.new_action("tty_client_use_connection".into()).unwrap();
-    let tty_driver_unload_action = context.new_action("tty_driver_unload".into()).unwrap();
-    let tty_driver_unloaded_action = context.new_action("tty_driver_unloaded".into()).unwrap();
+    let tty_driver_load_action = context.new_action("tty_driver_load").unwrap();
+    let tty_driver_loaded_action = context.new_action("tty_driver_loaded").unwrap();
+    let tty_client_request_connection_action = context.new_action("tty_client_request_connection").unwrap();
+    let tty_driver_grant_connection_action = context.new_action("tty_driver_grant_connection").unwrap();
+    let tty_client_disconnect_action = context.new_action("tty_client_disconnect").unwrap();
+    let tty_client_disconnected_action = context.new_action("tty_client_disconnected").unwrap();
+    let tty_client_acquire_connection_action = context.new_action("tty_client_acquire_connection").unwrap();
+    let tty_client_use_connection_action = context.new_action("tty_client_use_connection").unwrap();
+    let tty_driver_unload_action = context.new_action("tty_driver_unload").unwrap();
+    let tty_driver_unloaded_action = context.new_action("tty_driver_unloaded").unwrap();
 
-    let tty_client_nodriver_state = context.new_node("tty_client_nodriver".into()).unwrap();
-    let tty_client_disconnected_state = context.new_node("tty_client_disconnected".into()).unwrap();
-    let tty_client_disconnecting_state = context.new_node("tty_client_disconnecting".into()).unwrap();
-    let tty_client_wait_connection_state = context.new_node("tty_client_wait_connection".into()).unwrap();
-    let tty_client_connected_state = context.new_node("tty_client_connected_state".into()).unwrap();
+    let tty_client_nodriver_state = context.new_node("tty_client_nodriver").unwrap();
+    let tty_client_disconnected_state = context.new_node("tty_client_disconnected").unwrap();
+    let tty_client_disconnecting_state = context.new_node("tty_client_disconnecting").unwrap();
+    let tty_client_wait_connection_state = context.new_node("tty_client_wait_connection").unwrap();
+    let tty_client_connected_state = context.new_node("tty_client_connected_state").unwrap();
 
-    let tty_driver_unloaded_state = context.new_node("tty_driver_unloaded".into()).unwrap();
-    let tty_driver_loading_state = context.new_node("tty_driver_loading".into()).unwrap();
-    let tty_driver_unloading_state = context.new_node("tty_driver_unloading".into()).unwrap();
-    let tty_driver_client_inactive_substate = context.new_node("tty_driver_client_inactive".into()).unwrap();
-    let tty_driver_client_active_substate = context.new_node("tty_driver_client_active".into()).unwrap();
+    let tty_driver_unloaded_state = context.new_node("tty_driver_unloaded").unwrap();
+    let tty_driver_loading_state = context.new_node("tty_driver_loading").unwrap();
+    let tty_driver_unloading_state = context.new_node("tty_driver_unloading").unwrap();
+    let tty_driver_client_inactive_substate = context.new_node("tty_driver_client_inactive").unwrap();
+    let tty_driver_client_active_substate = context.new_node("tty_driver_client_active").unwrap();
     
     let mut process_set = ProcessSet::new();
     let tty_driver = process_set.new_process("tty_driver".into(), tty_driver_unloaded_state);
     let tty_clients = (0..NUM_OF_CLIENTS).map(| client_id |
         process_set.new_process(format!("tty_client{}", client_id), tty_client_nodriver_state))
         .collect::<Vec<_>>();
+    let tty_client_participants = tty_clients.iter()
+        .map(| &process | process.into())
+        .collect::<Vec<StateMachineMessageParticipantID>>();
 
     context.new_edge(tty_driver_client_inactive_substate, tty_driver_client_active_substate, Some(tty_client_request_connection_msg), Some(tty_driver_grant_connection_action)).unwrap();
     context.new_edge(tty_driver_client_active_substate, tty_driver_client_inactive_substate, Some(tty_client_disconnect_msg), None).unwrap();
     let tty_driver_loaded_state = StateMachineProductNodeBuilder::new(tty_driver_client_inactive_substate, tty_clients.len()).build(&mut context).unwrap();
 
-    process_set.new_inbound_message_mapping(tty_driver, tty_driver_loaded_state.get_inbound_message_mapping(tty_clients.iter().map(| process | {
-        Into::<StateMachineMessageParticipantID>::into(*process)
-    })).unwrap()).unwrap();
-    process_set.new_outbound_message_mapping(tty_driver, tty_driver_loaded_state.get_outbound_message_mapping(tty_clients.iter().map(| process | {
-        Into::<StateMachineMessageParticipantID>::into(*process)
-    })).unwrap()).unwrap();
+    process_set.new_inbound_message_mapping(tty_driver, tty_driver_loaded_state.get_inbound_message_mapping(tty_client_participants.clone().into_iter()).unwrap()).unwrap();
+    process_set.new_outbound_message_mapping(tty_driver, tty_driver_loaded_state.get_outbound_message_mapping(tty_client_participants.clone().into_iter()).unwrap()).unwrap();
 
     context.add_envelope(tty_driver_loaded_action,
-         StateMachineMessageDestination::Multicast(tty_clients.iter().map(| x | (*x).into()).collect()),
+         StateMachineMessageDestination::Multicast(tty_client_participants.clone().into_iter().collect()),
         tty_driver_loaded_msg).unwrap();
     context.add_envelope(tty_client_request_connection_action,
         StateMachineMessageDestination::Unicast( tty_driver.into()),
@@ -88,7 +87,7 @@ fn main() {
         StateMachineMessageDestination::Unicast(tty_driver.into()),
         tty_client_disconnect_msg).unwrap();
     context.add_envelope(tty_driver_unload_action,
-        StateMachineMessageDestination::Multicast(tty_clients.iter().map(| x | (*x).into()).collect()),
+        StateMachineMessageDestination::Multicast(tty_client_participants.into_iter().collect()),
         tty_driver_unloading_msg).unwrap();
 
     context.new_edge(tty_client_nodriver_state, tty_client_nodriver_state, None, None).unwrap();
