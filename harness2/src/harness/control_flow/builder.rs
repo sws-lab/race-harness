@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, rc::Rc};
 
 use crate::harness::core::{error::HarnessError, process::{ProcessID, ProcessSet}, state_machine::{StateMachineContext, StateMachineEdgeID, StateMachineNodeID}};
 
-use super::{mutex::{ControlFlowMutexID, ControlFlowMutexSet}, node::{ControlFlowLabel, ControlFlowLabelGenerator, ControlFlowNode}};
+use super::{mutex::ControlFlowMutexSet, node::{ControlFlowLabel, ControlFlowLabelGenerator, ControlFlowNode}};
 
 pub struct ControlFlowBuilder {
     backward_edges: HashSet<StateMachineEdgeID>,
@@ -85,7 +85,7 @@ impl ControlFlowBuilder {
             .collect::<Result<Vec<_>, HarnessError>>()?;
 
         let node = if edge_nodes.len() > 1 {
-            ControlFlowNode::Sequence(edge_nodes)
+            ControlFlowNode::Branch(edge_nodes)
         } else if !edge_nodes.is_empty() {
             edge_nodes.pop().unwrap()
         } else {

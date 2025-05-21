@@ -20,6 +20,12 @@ pub enum ControlFlowNode {
     InitBarrier
 }
 
+impl Into<u64> for ControlFlowLabel {
+    fn into(self) -> u64 {
+        self.0
+    }
+}
+
 impl ControlFlowLabelGenerator {
     pub fn new() -> ControlFlowLabelGenerator {
         ControlFlowLabelGenerator(0)

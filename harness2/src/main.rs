@@ -1,12 +1,50 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
-use harness::{control_flow::{builder::ControlFlowBuilder, mutex::ControlFlowMutexSet}, core::{format::ProcessSetStateSpaceFormatter, mutex::{format::MutualExclusionSegmentFormatter, mutex::ProcessSetMutualExclusion}, process::ProcessSet, state_machine::{StateMachineContext, StateMachineMessageDestination, StateMachineMessageParticipantID}}, entities::product_node::StateMachineProductNodeBuilder};
+use harness::{codegen::{base::{CodegenOutput, CodegenTemplate, ControlFlowBaseCodegen}, executable::ControlFlowExecutableCodegen}, control_flow::{builder::ControlFlowBuilder, mutex::ControlFlowMutexSet}, core::{mutex::mutex::ProcessSetMutualExclusion, process::ProcessSet, state_machine::{StateMachineContext, StateMachineMessageDestination, StateMachineMessageParticipantID}}, entities::product_node::StateMachineProductNodeBuilder};
 
 pub mod harness;
 
+struct StdoutExecutableCodegen {
+    indent: u64,
+    first_line: bool,
+    skip_newline: bool
+}
+
+impl CodegenOutput for StdoutExecutableCodegen {
+    fn indent_down(&mut self) {
+        self.indent -= 1;
+    }
+
+    fn indent_up(&mut self) {
+        self.indent += 1;
+    }
+
+    fn skip_newline(&mut self) {
+        self.skip_newline = true;
+    }
+
+    fn write_line<T>(&mut self, content: T)
+            where T: Display {
+        if !self.first_line && !self.skip_newline {
+            println!("");
+        }
+
+        if self.first_line || !self.skip_newline {
+            for _ in 0..self.indent {
+                print!("  ");
+            }
+        }
+        self.first_line = false;
+        self.skip_newline = false;
+        print!("{}", content);
+    }
+}
+
+impl ControlFlowExecutableCodegen for StdoutExecutableCodegen {}
+
 fn main() {
     let mut context = StateMachineContext::new();
-    const NUM_OF_CLIENTS: usize = 2;
+    const NUM_OF_CLIENTS: usize = 5;
 
     let tty_driver_loaded_msg = context.new_message("tty_driver_loaded").unwrap();
     let tty_client_request_connection_msg = context.new_message("tty_client_request_connection").unwrap();
@@ -92,21 +130,56 @@ fn main() {
     context.new_edge(tty_driver_unloading_state, tty_driver_unloaded_state, None, Some(tty_driver_unloaded_action)).unwrap();
     
     let state_space = process_set.get_state_space(&context).unwrap();
-    println!("{}", state_space.len());
-    println!("{}", ProcessSetStateSpaceFormatter::new(&context, &process_set, &state_space).unwrap());
-
-    println!("--------------------------------------");
     let mutual_exclusion = ProcessSetMutualExclusion::new(&context, &process_set, &state_space).unwrap();
-    for segment in mutual_exclusion.iter() {
-        println!("{}", MutualExclusionSegmentFormatter::new(&context, &process_set, segment).unwrap());
-    }
-
     let mutex_set = ControlFlowMutexSet::new(mutual_exclusion.iter());
     let control_flow_nodes = process_set.get_processes()
         .map(| process | {
             let root = process_set.get_process_entry_node(process).unwrap();
             let node = ControlFlowBuilder::new(&context, root).unwrap().build(&context, &process_set, process, &mutex_set).unwrap();
-            println!("{:?}", node);
-            (process, node)
+            (process, node.canonicalize())
         }).collect::<HashMap<_, _>>();
+
+    let mut template = CodegenTemplate::new();
+    template.set_global_prologue(Some(r#"
+#include <stdlib.h>
+#include <stdio.h>
+#include <pthread.h>
+
+struct S1 {
+    _Atomic unsigned int connections;
+    _Atomic unsigned int value;
+};
+                            
+static struct S1 *s1_ptr;
+"#)).set_process_prologue(tty_driver, "static struct S1 s1 = {0};")
+    .define_action(tty_driver_load_action, r#"
+s1_ptr = &s1;
+s1_ptr->connections = 0;
+s1_ptr->value = 0;
+printf("Driver loaded\n");
+"#).define_action(tty_driver_unloaded_action, r#"
+printf("Driver unloaded\n");
+s1_ptr = NULL;
+"#).define_action(tty_client_acquire_connection_action, r#"
+s1_ptr->connections++;
+printf("Client %client_id% connected\n");
+"#).define_action(tty_client_disconnect_action, r#"
+s1_ptr->connections--;
+printf("Client %client_id% disconnected\n");
+"#).define_action(tty_client_use_connection_action, r#"
+s1_ptr->value++;
+printf("Client %client_id% active\n");
+"#);
+
+    for (index, client) in tty_clients.iter().enumerate() {
+        template.set_process_parameter(*client, "client_id", format!("{}", index));
+    }
+
+    let mut codegen = StdoutExecutableCodegen {
+        indent: 0,
+        first_line: true,
+        skip_newline: false
+    };
+    codegen.format(&context, &process_set, &template, control_flow_nodes.iter().map(| (process, node) | (*process, node)), mutex_set.get_mutexes()).unwrap();
+
 }

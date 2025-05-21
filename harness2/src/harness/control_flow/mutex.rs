@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::harness::core::{mutex::segment::MutualExclusionSegment, process::ProcessID, state_machine::StateMachineNodeID};
 
@@ -10,6 +10,12 @@ pub struct ControlFlowMutex<'a>(ControlFlowMutexID, &'a MutualExclusionSegment);
 pub struct ControlFlowMutexSet<'a> {
     mutexes: HashMap<ControlFlowMutexID, ControlFlowMutex<'a>>,
     segment_mutexes: HashMap<&'a MutualExclusionSegment, ControlFlowMutexID>
+}
+
+impl Into<u64> for ControlFlowMutexID {
+    fn into(self) -> u64 {
+        self.0
+    }
 }
 
 impl<'a> ControlFlowMutex<'a> {

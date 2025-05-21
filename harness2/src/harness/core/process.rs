@@ -16,6 +16,12 @@ pub struct ProcessSet {
     processes: HashMap<ProcessID, Process>
 }
 
+impl From<ProcessID> for u64 {
+    fn from(value: ProcessID) -> Self {
+        value.0
+    }
+}
+
 impl From<ProcessID> for StateMachineMessageParticipantID {
     fn from(value: ProcessID) -> Self {
         StateMachineMessageParticipantID(value.0)
