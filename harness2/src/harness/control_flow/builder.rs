@@ -51,7 +51,7 @@ impl ControlFlowBuilder {
             visited.insert(current_state);
 
             if !self.labelled_states.contains_key(&current_state) {
-                self.labelled_states.insert(current_state, label_gen.next_label());
+                self.labelled_states.insert(current_state, label_gen.next_label(current_state));
             }
 
             let new_path = Rc::new({

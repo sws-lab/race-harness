@@ -1,4 +1,4 @@
-use crate::harness::{control_flow::mutex::ControlFlowMutexID, core::{error::HarnessError, process::ProcessID}};
+use crate::harness::{control_flow::mutex::ControlFlowMutexID, core::{error::HarnessError, process::{ProcessID, ProcessSet}}};
 
 use super::{codegen::ControlFlowCodegen, output::CodegenOutput};
 
@@ -38,8 +38,9 @@ extern int __harness_rand(void);
         Ok(())
     }
 
-    fn begin_process_definition(&self, output: &mut Output, process: ProcessID) -> Result<(), HarnessError> {
-        output.write_line(format!("void *process{}(void *arg) {{", Into::<u64>::into(process)))?;
+    fn begin_process_definition(&self, output: &mut Output, process_set: &ProcessSet, process: ProcessID) -> Result<(), HarnessError> {
+        let process_mnemonic = process_set.get_process_mnemonic(process).ok_or(HarnessError::new("Unable to retrieve process mnemonic"))?;
+        output.write_line(format!("void *process_{}(void *arg) {{", process_mnemonic))?;
         output.indent_up();
         output.write_line("(void) arg; // Unused")?;
         Ok(())
@@ -79,21 +80,24 @@ extern int __harness_rand(void);
         Ok(())
     }
 
-    fn declare_process_thread(&self, output: &mut Output, process: ProcessID) -> Result<(), HarnessError> {
-        output.write_line(format!("__harness_thread_t process_thread{};",
-            Into::<u64>::into(process)))?;
+    fn declare_process_thread(&self, output: &mut Output, process_set: &ProcessSet, process: ProcessID) -> Result<(), HarnessError> {
+        let process_mnemonic = process_set.get_process_mnemonic(process).ok_or(HarnessError::new("Unable to retrieve process mnemonic"))?;
+        output.write_line(format!("__harness_thread_t process_{}_thread;",
+            process_mnemonic))?;
         Ok(())
     }
 
-    fn start_process_thread(&self, output: &mut Output, process: ProcessID) -> Result<(), HarnessError> {
-        output.write_line(format!("__harness_thread_create(&process_thread{}, NULL, process{}, NULL);",
-            Into::<u64>::into(process), Into::<u64>::into(process)))?;
+    fn start_process_thread(&self, output: &mut Output, process_set: &ProcessSet, process: ProcessID) -> Result<(), HarnessError> {
+        let process_mnemonic = process_set.get_process_mnemonic(process).ok_or(HarnessError::new("Unable to retrieve process mnemonic"))?;
+        output.write_line(format!("__harness_thread_create(&process_{}_thread, NULL, process_{}, NULL);",
+            process_mnemonic, process_mnemonic))?;
         Ok(())
     }
 
-    fn join_process_thread(&self, output: &mut Output, process: ProcessID) -> Result<(), HarnessError> {
-        output.write_line(format!("__harness_thread_join(process_thread{}, NULL);",
-            Into::<u64>::into(process)))?;
+    fn join_process_thread(&self, output: &mut Output, process_set: &ProcessSet, process: ProcessID) -> Result<(), HarnessError> {
+        let process_mnemonic = process_set.get_process_mnemonic(process).ok_or(HarnessError::new("Unable to retrieve process mnemonic"))?;
+        output.write_line(format!("__harness_thread_join(process_{}_thread, NULL);",
+            process_mnemonic))?;
         Ok(())
     }
 
@@ -119,7 +123,7 @@ extern int __harness_rand(void);
         Ok(())
     }
 
-    fn wait_init_barrier(&self, output: &mut Output, process: ProcessID, other_processes: impl Iterator<Item = ProcessID>) -> Result<(), HarnessError> {
+    fn wait_init_barrier(&self, output: &mut Output, _: &ProcessSet, process: ProcessID, other_processes: impl Iterator<Item = ProcessID>) -> Result<(), HarnessError> {
         output.write_line(format!("process{}_init_barrier = 1;",
             Into::<u64>::into(process)))?;
 

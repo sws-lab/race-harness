@@ -8,19 +8,19 @@ pub trait ControlFlowCodegen<Output: CodegenOutput> {
     fn generate_prologue(&self, output: &mut Output) -> Result<(), HarnessError>;
     fn declare_mutex(&self, output: &mut Output, mutex: ControlFlowMutexID) -> Result<(), HarnessError>;
     fn declare_init_barrier(&self, output: &mut Output, processes: impl Iterator<Item = ProcessID>) -> Result<(), HarnessError>;
-    fn begin_process_definition(&self, output: &mut Output, process: ProcessID) -> Result<(), HarnessError>;
+    fn begin_process_definition(&self, output: &mut Output, process_set: &ProcessSet, process: ProcessID) -> Result<(), HarnessError>;
     fn end_process_definition(&self, output: &mut Output, process: ProcessID) -> Result<(), HarnessError>;
     fn begin_main_definition(&self, output: &mut Output) -> Result<(), HarnessError>;
     fn end_main_definition(&self, output: &mut Output) -> Result<(), HarnessError>;
     fn setup_init_barrier(&self, output: &mut Output, processes: impl Iterator<Item = ProcessID>) -> Result<(), HarnessError>;
     fn initialize_mutex(&self, output: &mut Output, mutex: ControlFlowMutexID) -> Result<(), HarnessError>;
-    fn declare_process_thread(&self, output: &mut Output, process: ProcessID) -> Result<(), HarnessError>;
-    fn start_process_thread(&self, output: &mut Output, process: ProcessID) -> Result<(), HarnessError>;
-    fn join_process_thread(&self, output: &mut Output, process: ProcessID) -> Result<(), HarnessError>;
+    fn declare_process_thread(&self, output: &mut Output, process_set: &ProcessSet, process: ProcessID) -> Result<(), HarnessError>;
+    fn start_process_thread(&self, output: &mut Output, process_set: &ProcessSet, process: ProcessID) -> Result<(), HarnessError>;
+    fn join_process_thread(&self, output: &mut Output, process_set: &ProcessSet, process: ProcessID) -> Result<(), HarnessError>;
     fn lock_mutex(&self, output: &mut Output, mutex: ControlFlowMutexID) -> Result<(), HarnessError>;
     fn unlock_mutex(&self, output: &mut Output, mutex: ControlFlowMutexID) -> Result<(), HarnessError>;
     fn do_synchronization(&self, output: &mut Output, lock: impl Iterator<Item = ControlFlowMutexID>, unlock: impl Iterator<Item = ControlFlowMutexID>, rollback_on_failure: Option<&str>) -> Result<(), HarnessError>;
-    fn wait_init_barrier(&self, output: &mut Output, process: ProcessID, other_processes: impl Iterator<Item = ProcessID>) -> Result<(), HarnessError>;
+    fn wait_init_barrier(&self, output: &mut Output, process_set: &ProcessSet, process: ProcessID, other_processes: impl Iterator<Item = ProcessID>) -> Result<(), HarnessError>;
     fn generate_random(&self, max: u32) -> String;
 
     fn embed_multiline(&self, output: &mut Output, content: &str) -> Result<(), HarnessError> {
@@ -70,7 +70,7 @@ pub trait ControlFlowCodegen<Output: CodegenOutput> {
         output.write_line("")?;
 
         for (process, root_node) in &processes {
-            self.begin_process_definition(output, *process)?;
+            self.begin_process_definition(output, process_set, *process)?;
             output.write_line("")?;
 
             if let Some(prologue) = template.get_process_prologue(*process) {
@@ -94,7 +94,7 @@ pub trait ControlFlowCodegen<Output: CodegenOutput> {
         self.begin_main_definition(output)?;
 
         for (process, _) in &processes {
-            self.declare_process_thread(output, *process)?;
+            self.declare_process_thread(output, process_set, *process)?;
         }
         output.write_line("")?;
 
@@ -107,12 +107,12 @@ pub trait ControlFlowCodegen<Output: CodegenOutput> {
         output.write_line("")?;
 
         for (process, _) in &processes {
-            self.start_process_thread(output, *process)?;
+            self.start_process_thread(output,process_set, *process)?;
         }
         output.write_line("")?;
 
         for (process, _) in &processes {
-            self.join_process_thread(output, *process)?;
+            self.join_process_thread(output, process_set, *process)?;
         }
         output.write_line("")?;
 
@@ -176,7 +176,9 @@ pub trait ControlFlowCodegen<Output: CodegenOutput> {
     }
 
     fn format_labelled(&self, output: &mut Output, context: &StateMachineContext, process_set: &ProcessSet, template: &CodegenTemplate, process: ProcessID, label: ControlFlowLabel, node: &ControlFlowNode, label_map: &mut impl FnMut(ControlFlowLabel) -> String) -> Result<(), HarnessError> {
+        let state_mnemonic = context.get_node_mnemonic(label.get_state_machine_node()).ok_or(HarnessError::new("Unable to retrieve state machine node mnemonic"))?;
         let label_text = label_map(label);
+        output.write_line(format!("/* {} */", state_mnemonic))?;
         output.write_line(format!("{}: ", label_text))?;
         output.skip_newline();
         self.format_node(output, context, process_set, template, process, node, label_map)?;
@@ -195,7 +197,7 @@ pub trait ControlFlowCodegen<Output: CodegenOutput> {
             
             if index + 2 < branches.len() {
                 output.skip_newline();
-                output.write_line(format!("else if ({} == 0) ",
+                output.write_line(format!(" else if ({} == 0) ",
                     self.generate_random((branches.len() - index) as u32)))?;
                 output.skip_newline();
             } else if index + 1 < branches.len() {
@@ -208,7 +210,7 @@ pub trait ControlFlowCodegen<Output: CodegenOutput> {
     }
 
     fn format_init_barrier(&self, output: &mut Output, process_set: &ProcessSet, process: ProcessID) -> Result<(), HarnessError> {
-        self.wait_init_barrier(output, process, process_set.iter().filter(| other_process | *other_process != process))
+        self.wait_init_barrier(output, process_set, process, process_set.iter().filter(| other_process | *other_process != process))
     }
 
     fn format_goto(&self, output: &mut Output, label: ControlFlowLabel, label_map: &mut impl FnMut(ControlFlowLabel) -> String) -> Result<(), HarnessError> {

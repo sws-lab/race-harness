@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 
-use crate::harness::core::state_machine::StateMachineEdgeID;
+use crate::harness::core::state_machine::{StateMachineEdgeID, StateMachineNodeID};
 
 use super::mutex::ControlFlowMutexID;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
-pub struct ControlFlowLabel(u64);
+pub struct ControlFlowLabel(u64, StateMachineNodeID);
 
 pub struct ControlFlowLabelGenerator(u64);
 
@@ -26,13 +26,19 @@ impl Into<u64> for ControlFlowLabel {
     }
 }
 
+impl ControlFlowLabel {
+    pub fn get_state_machine_node(&self) -> StateMachineNodeID {
+        self.1
+    }
+}
+
 impl ControlFlowLabelGenerator {
     pub fn new() -> ControlFlowLabelGenerator {
         ControlFlowLabelGenerator(0)
     }
 
-    pub fn next_label(&mut self) -> ControlFlowLabel {
-        let label = ControlFlowLabel(self.0);
+    pub fn next_label(&mut self, node: StateMachineNodeID) -> ControlFlowLabel {
+        let label = ControlFlowLabel(self.0, node);
         self.0 += 1;
         label
     }

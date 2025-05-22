@@ -1,4 +1,4 @@
-use crate::harness::{codegen::{codegen::ControlFlowCodegen, executable::ControlFlowExecutableCodegen, goblint::ControlFlowGoblintCodegen, template::CodegenTemplate}, core::{process::ProcessID, state_machine::{StateMachineActionID, StateMachineMessageDestination, StateMachineMessageID, StateMachineMessageParticipantID, StateMachineNodeID}}, entities::product_node::StateMachineProductNodeBuilder};
+use crate::harness::{codegen::{codegen::ControlFlowCodegen, executable::ControlFlowExecutableCodegen, goblint::ControlFlowGoblintCodegen, output::CodegenOutput, template::CodegenTemplate}, core::{error::HarnessError, process::{ProcessID, ProcessSet}, state_machine::{StateMachineActionID, StateMachineContext, StateMachineMessageDestination, StateMachineMessageID, StateMachineMessageParticipantID, StateMachineNodeID}}, entities::product_node::StateMachineProductNodeBuilder};
 
 use super::base::HarnessExample;
 
@@ -50,7 +50,7 @@ impl TtyPrintkExample {
 impl HarnessExample for TtyPrintkExample {
     type Model = TtyPrintkModel;
 
-    fn build_model(&self, context: &mut crate::harness::core::state_machine::StateMachineContext, process_set: &mut crate::harness::core::process::ProcessSet) -> Result<Self::Model, crate::harness::core::error::HarnessError> {
+    fn build_model(&self, context: &mut StateMachineContext, process_set: &mut ProcessSet) -> Result<Self::Model, HarnessError> {
         let tty_driver_loaded_msg = context.new_message("tty_driver_loaded")?;
         let tty_client_request_connection_msg = context.new_message("tty_client_request_connection")?;
         let tty_driver_grant_connection_msg = context.new_message("tty_client_grant_connection")?;
@@ -164,11 +164,11 @@ impl HarnessExample for TtyPrintkExample {
             tty_driver_client_active_substate,
         
             tty_driver,
-            tty_clients: Vec::from(tty_clients)
+            tty_clients
         })
     }
 
-    fn executable_codegen<Output: crate::harness::codegen::output::CodegenOutput>(&self, model: &Self::Model) -> Result<(CodegenTemplate, impl ControlFlowCodegen<Output>), crate::harness::core::error::HarnessError> {
+    fn executable_codegen<Output: CodegenOutput>(&self, model: &Self::Model) -> Result<(CodegenTemplate, impl ControlFlowCodegen<Output>), HarnessError> {
         let mut template = CodegenTemplate::new().set_global_prologue(Some(r#"
 #include <stdlib.h>
 #include <stdio.h>
@@ -208,7 +208,7 @@ printf("Client %client_id% active\n");
         Ok((template, codegen))
     }
 
-    fn goblint_codegen<Output: crate::harness::codegen::output::CodegenOutput>(&self, model: &Self::Model) -> Result<(CodegenTemplate, impl ControlFlowCodegen<Output>), crate::harness::core::error::HarnessError> {
+    fn goblint_codegen<Output: CodegenOutput>(&self, model: &Self::Model) -> Result<(CodegenTemplate, impl ControlFlowCodegen<Output>), HarnessError> {
         let mut template = CodegenTemplate::new().set_global_prologue(Some(r#"
 #include "linux/compiler_types.h"
 #include "linux/kconfig.h"
@@ -224,20 +224,14 @@ printf("Client %client_id% active\n");
 
 extern struct tty_driver *registered_tty_driver;
 "#))
-    .define_action(model.tty_driver_load_action, r#"
-init_module();
-"#).define_action(model.tty_driver_unloaded_action, r#"
-cleanup_module();
-"#).define_action(model.tty_client_acquire_connection_action, r#"
-registered_tty_driver->ops->open(&tty, &file);
-"#).define_action(model.tty_client_disconnect_action, r#"
-registered_tty_driver->ops->close(&tty, &file);
-"#).define_action(model.tty_client_use_connection_action, r#"
-registered_tty_driver->ops->write(&tty, content, sizeof(content));
-"#);
+   .define_action(model.tty_driver_load_action, r#"init_module();"#)
+   .define_action(model.tty_driver_unloaded_action, r#"cleanup_module();"#)
+   .define_action(model.tty_client_acquire_connection_action, r#"registered_tty_driver->ops->open(&tty, &file);"#)
+   .define_action(model.tty_client_disconnect_action, r#"registered_tty_driver->ops->close(&tty, &file);"#)
+   .define_action(model.tty_client_use_connection_action, r#"registered_tty_driver->ops->write(&tty, content, sizeof(content));"#);
 
         for (index, client) in model.tty_clients.iter().enumerate() {
-            template = template.set_process_parameter(*client, "client_id", format!("{}", index))
+            template = template.set_process_parameter(*client, "client_id", index.to_string())
                 .set_process_prologue(*client, r#"
 struct tty_struct tty;
 struct file file;

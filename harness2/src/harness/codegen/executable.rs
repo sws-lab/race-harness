@@ -1,4 +1,4 @@
-use crate::harness::{control_flow::mutex::ControlFlowMutexID, core::{error::HarnessError, process::ProcessID}};
+use crate::harness::{control_flow::mutex::ControlFlowMutexID, core::{error::HarnessError, process::{ProcessID, ProcessSet}}};
 
 use super::{codegen::ControlFlowCodegen, output::CodegenOutput};
 
@@ -29,8 +29,9 @@ impl<Output: CodegenOutput> ControlFlowCodegen<Output> for ControlFlowExecutable
         Ok(())
     }
 
-    fn begin_process_definition(&self, output: &mut Output, process: ProcessID) -> Result<(), HarnessError> {
-        output.write_line(format!("void *process{}(void *arg) {{", Into::<u64>::into(process)))?;
+    fn begin_process_definition(&self, output: &mut Output, process_set: &ProcessSet, process: ProcessID) -> Result<(), HarnessError> {
+        let process_mnemonic = process_set.get_process_mnemonic(process).ok_or(HarnessError::new("Unable to retrieve process mnemonic"))?;
+        output.write_line(format!("void *process_{}(void *arg) {{", process_mnemonic))?;
         output.indent_up();
         output.write_line("(void) arg; // Unused")?;
         Ok(())
@@ -68,21 +69,24 @@ impl<Output: CodegenOutput> ControlFlowCodegen<Output> for ControlFlowExecutable
         Ok(())
     }
 
-    fn declare_process_thread(&self, output: &mut Output, process: ProcessID) -> Result<(), HarnessError> {
-        output.write_line(format!("pthread_t process_thread{};",
-            Into::<u64>::into(process)))?;
+    fn declare_process_thread(&self, output: &mut Output, process_set: &ProcessSet, process: ProcessID) -> Result<(), HarnessError> {
+        let process_mnemonic = process_set.get_process_mnemonic(process).ok_or(HarnessError::new("Unable to retrieve process mnemonic"))?;
+        output.write_line(format!("pthread_t process_{}_thread;",
+            process_mnemonic))?;
         Ok(())
     }
 
-    fn start_process_thread(&self, output: &mut Output, process: ProcessID) -> Result<(), HarnessError> {
-        output.write_line(format!("pthread_create(&process_thread{}, NULL, process{}, NULL);",
-            Into::<u64>::into(process), Into::<u64>::into(process)))?;
+    fn start_process_thread(&self, output: &mut Output, process_set: &ProcessSet, process: ProcessID) -> Result<(), HarnessError> {
+        let process_mnemonic = process_set.get_process_mnemonic(process).ok_or(HarnessError::new("Unable to retrieve process mnemonic"))?;
+        output.write_line(format!("pthread_create(&process_{}_thread, NULL, process_{}, NULL);",
+            process_mnemonic, process_mnemonic))?;
         Ok(())
     }
 
-    fn join_process_thread(&self, output: &mut Output, process: ProcessID) -> Result<(), HarnessError> {
-        output.write_line(format!("pthread_join(process_thread{}, NULL);",
-            Into::<u64>::into(process)))?;
+    fn join_process_thread(&self, output: &mut Output, process_set: &ProcessSet, process: ProcessID) -> Result<(), HarnessError> {
+        let process_mnemonic = process_set.get_process_mnemonic(process).ok_or(HarnessError::new("Unable to retrieve process mnemonic"))?;
+        output.write_line(format!("pthread_join(process_{}_thread, NULL);",
+            process_mnemonic))?;
         Ok(())
     }
 
@@ -100,9 +104,6 @@ impl<Output: CodegenOutput> ControlFlowCodegen<Output> for ControlFlowExecutable
 
     fn do_synchronization(&self, output: &mut Output, lock: impl Iterator<Item = ControlFlowMutexID>, unlock: impl Iterator<Item = ControlFlowMutexID>, rollback_on_failure: Option<&str>) -> Result<(), HarnessError> {
         if let Some(rollback_label) = rollback_on_failure {
-            output.write_line("for (;;) {")?;
-            output.indent_up();
-
             let lock = lock.collect::<Vec<_>>();
             for (index, &mutex) in lock.iter().enumerate() {
                 output.write_line(format!("if (pthread_mutex_trylock(&mutex{})) {{",
@@ -118,10 +119,6 @@ impl<Output: CodegenOutput> ControlFlowCodegen<Output> for ControlFlowExecutable
                 output.indent_down();
                 output.write_line("}")?;
             }
-
-            output.write_line("break;")?;
-            output.indent_down();
-            output.write_line("}")?;
         } else {
             for mutex in lock {
                 self.lock_mutex(output, mutex)?;
@@ -133,7 +130,7 @@ impl<Output: CodegenOutput> ControlFlowCodegen<Output> for ControlFlowExecutable
         Ok(())
     }
 
-    fn wait_init_barrier(&self, output: &mut Output, _: ProcessID, _: impl Iterator<Item = ProcessID>) -> Result<(), HarnessError> {
+    fn wait_init_barrier(&self, output: &mut Output, _: &ProcessSet, _: ProcessID, _: impl Iterator<Item = ProcessID>) -> Result<(), HarnessError> {
         output.write_line("pthread_barrier_wait(&harness_init_barrier);")?;
         Ok(())
     }
