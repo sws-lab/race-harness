@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use harness::{codegen::{codegen::ControlFlowCodegen, output::WriteCodegenOutput}, control_flow::{builder::ControlFlowBuilder, mutex::ControlFlowMutexSet}, core::{error::HarnessError, mutex::mutex::ProcessSetMutualExclusion, process::ProcessSet, state_machine::StateMachineContext}, examples::{base::HarnessExample, ttyprintk::TtyPrintkExample}};
+use harness::{codegen::{codegen::ControlFlowCodegen, output::WriteCodegenOutput}, control_flow::{builder::ControlFlowBuilder, mutex::ControlFlowMutexSet}, core::{error::HarnessError, mutex::mutex::ProcessSetMutualExclusion, process::ProcessSet, state_machine::StateMachineContext}, examples::{base::HarnessExample, pcspkr::PcspkrExample, ttyprintk::TtyPrintkExample}};
 
 pub mod harness;
 
@@ -33,5 +33,10 @@ fn generate(example: &impl HarnessExample) -> Result<(), HarnessError> {
 }
 
 fn main() {
-    generate(&TtyPrintkExample::new(3)).unwrap();
+    match std::env::var("HARNESS_EXAMPLE").as_deref().unwrap_or("ttyprintk") {
+        "ttyprintk" => generate(&TtyPrintkExample::new( 5)),
+        "pcspkr" => generate(&PcspkrExample::new(5, 5)),
+        example => panic!("Unknown HARNESS_EXAMPLE={}", example)
+
+    }.unwrap()
 }
