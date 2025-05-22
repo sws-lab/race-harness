@@ -71,7 +71,9 @@ compile_db/query_compilation_database.py  --db kernel/linux-6.14.1.db --build-id
 ./stub_generator/stub_generator.py --db kernel/linux-6.14.1.db --build-id 27fc3ea7-1240-4223-9977-56c56a22c9f0 drivers/char/ttyprintk.ko stubs.c --blacklist ".*builtin.*" --blacklist ".*compiletime.*" --blacklist ".*fortify.*" # See what is missing
 
 # Generate harness
-python harness/examples/ttyprintk_goblint.py > ~/ttyprintk-harness.c
+cd harness2
+cargo build --release
+./target/release/harness2 >/dev/null 2> ~/ttyprintk-harness.c
 
 # Run Goblint on the chosen module + stubs
 ./goblint_driver/goblint_driver.py --db kernel/linux-6.14.1.db --goblint ~/goblint/analyzer/goblint  drivers/char/ttyprintk.ko ~/ttyprintk-stubs.c ~/ttyprintk-harness.c
