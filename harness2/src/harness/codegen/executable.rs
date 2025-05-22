@@ -1,6 +1,6 @@
 use crate::harness::{control_flow::mutex::ControlFlowMutexID, core::{error::HarnessError, process::ProcessID}};
 
-use super::base::{CodegenOutput, ControlFlowCodegen};
+use super::{codegen::ControlFlowCodegen, output::CodegenOutput};
 
 pub struct ControlFlowExecutableCodegen;
 
@@ -111,7 +111,7 @@ impl<Output: CodegenOutput> ControlFlowCodegen<Output> for ControlFlowExecutable
 
                 for i in (0..index).rev() {
                     output.write_line(format!("pthread_mutex_unlock(&mutex{});",
-                        Into::<u64>::into(*lock.get(i).unwrap())))?;
+                        Into::<u64>::into(*lock.get(i).expect("Expected mutex at index to exist"))))?;
                 }
                 output.write_line(format!("goto {};", rollback_label))?;
 

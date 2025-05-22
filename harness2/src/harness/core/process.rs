@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use super::{process_state::{ProcessSetState, ProcessSetStateSpace}, error::HarnessError, state_machine::{StateMachineContext, StateMachineEdgeID, StateMachineMessageEnvelope, StateMachineMessageID, StateMachineMessageParticipantID, StateMachineNodeID}};
 
@@ -13,7 +13,7 @@ struct Process {
 }
 
 pub struct ProcessSet {
-    processes: HashMap<ProcessID, Process>
+    processes: BTreeMap<ProcessID, Process>
 }
 
 impl From<ProcessID> for u64 {
@@ -31,7 +31,7 @@ impl From<ProcessID> for StateMachineMessageParticipantID {
 impl ProcessSet {
     pub fn new() -> ProcessSet {
         ProcessSet {
-            processes: HashMap::new()
+            processes: BTreeMap::new()
         }
     }
 

@@ -237,6 +237,6 @@ impl<'a> StateMachineContext {
         }
 
         self.reachable_nodes.borrow_mut().insert(root, reachable);
-        Ok(self.reachable_nodes.borrow().get(&root).unwrap().iter().map(| x | *x).collect())
+        Ok(self.reachable_nodes.borrow().get(&root).expect("Expected node to exist in reachable node cache").iter().map(| x | *x).collect())
     }
 }

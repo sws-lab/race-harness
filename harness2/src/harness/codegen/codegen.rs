@@ -1,59 +1,8 @@
-use std::{collections::HashMap, fmt::Display};
+use std::collections::HashMap;
 
-use crate::harness::{control_flow::{mutex::{ControlFlowMutex, ControlFlowMutexID}, node::{ControlFlowLabel, ControlFlowNode}}, core::{error::HarnessError, process::{ProcessID, ProcessSet}, state_machine::{StateMachineActionID, StateMachineContext, StateMachineEdgeID}}};
+use crate::harness::{control_flow::{mutex::{ControlFlowMutex, ControlFlowMutexID}, node::{ControlFlowLabel, ControlFlowNode}}, core::{error::HarnessError, process::{ProcessID, ProcessSet}, state_machine::{StateMachineContext, StateMachineEdgeID}}};
 
-pub struct CodegenTemplate {
-    global_prologue: Option<String>,
-    process_parameters: HashMap<ProcessID, HashMap<String, String>>,
-    process_prologues: HashMap<ProcessID, String>,
-    actions: HashMap<StateMachineActionID, String>
-}
-
-impl CodegenTemplate {
-    pub fn new() -> CodegenTemplate {
-        CodegenTemplate {
-            global_prologue: None,
-            process_parameters: HashMap::new(),
-            process_prologues: HashMap::new(),
-            actions: HashMap::new()
-        }
-    }
-
-    pub fn set_global_prologue<T>(mut self, prologue: Option<T>) -> Self
-        where T: Into<String> {
-        self.global_prologue = prologue.map(| content | content.into());
-        self
-    }
-
-    pub fn set_process_parameter<T>(mut self, process: ProcessID, name: &str, value: T) -> Self
-        where T: Into<String> {
-        self.process_parameters.entry(process)
-            .or_default()
-            .insert(name.into(), value.into());
-        self
-    }
-
-    pub fn set_process_prologue<T>(mut self, process: ProcessID, prologue: T) -> Self
-        where T: Into<String> {
-        self.process_prologues.insert(process, prologue.into());
-        self
-    }
-
-    pub fn define_action<T>(mut self, action: StateMachineActionID, content: T) -> Self
-        where T: Into<String> {
-        self.actions.insert(action, content.into());
-        self
-    }
-}
-
-pub trait CodegenOutput {
-    fn write_line<T>(&mut self, content: T) -> Result<(), HarnessError>
-        where T: Display;
-    fn indent_up(&mut self);
-    fn indent_down(&mut self);
-    fn skip_newline(&mut self);
-    fn flush(&mut self) -> Result<(), HarnessError>;
-}
+use super::{output::CodegenOutput, template::CodegenTemplate};
 
 pub trait ControlFlowCodegen<Output: CodegenOutput> {
     fn generate_prologue(&self, output: &mut Output) -> Result<(), HarnessError>;
@@ -81,21 +30,11 @@ pub trait ControlFlowCodegen<Output: CodegenOutput> {
         Ok(())
     }
 
-    fn parameterize_template(&self, template: &CodegenTemplate, process: ProcessID, content: &str) -> String {
-        let mut content = content.to_owned();
-        if let Some(parameters) = template.process_parameters.get(&process) {
-            for (key, value) in parameters {
-                content = content.replace(&format!("%{}%", key), &value);
-            }
-        }
-        content
-    }
-
     fn format<'a>(&self, output: &mut Output, context: &StateMachineContext, process_set: &ProcessSet, template: &CodegenTemplate, processes: impl Iterator<Item = (ProcessID, &'a ControlFlowNode)>, mutexes: impl Iterator<Item = &'a ControlFlowMutex<'a>>) -> Result<(), HarnessError> {
         self.generate_prologue(output)?;
         output.write_line("")?;
 
-        if let Some(prologue) = &template.global_prologue {
+        if let Some(prologue) = template.get_global_prologue() {
             self.embed_multiline(output, prologue)?;
             output.write_line("")?;
         }
@@ -134,8 +73,8 @@ pub trait ControlFlowCodegen<Output: CodegenOutput> {
             self.begin_process_definition(output, *process)?;
             output.write_line("")?;
 
-            if let Some(prologue) = template.process_prologues.get(&process) {
-                self.embed_multiline(output, &self.parameterize_template(template, *process, prologue.as_str()))?;
+            if let Some(prologue) = template.get_process_prologue(*process) {
+                self.embed_multiline(output, &template.apply(*process, prologue))?;
                 output.write_line("")?;
             }
 
@@ -178,6 +117,7 @@ pub trait ControlFlowCodegen<Output: CodegenOutput> {
         output.write_line("")?;
 
         self.end_main_definition(output)?;
+        output.flush()?;
         Ok(())
     }
 
@@ -215,8 +155,8 @@ pub trait ControlFlowCodegen<Output: CodegenOutput> {
         output.write_line(format!("/* {} -> {} */", edge_source_mnemonic, edge_target_mnemonic))?;
 
         if let Some(action) = edge_action {
-            if let Some(content) = template.actions.get(&action) {
-                self.embed_multiline(output, &self.parameterize_template(template, process, content.as_str()))?;
+            if let Some(content) = template.get_action(action) {
+                self.embed_multiline(output, &template.apply(process, content))?;
             }
         }
         Ok(())

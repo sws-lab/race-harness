@@ -2,8 +2,14 @@ use std::{fmt::Display, io::Write};
 
 use crate::harness::core::error::HarnessError;
 
-use super::base::CodegenOutput;
-
+pub trait CodegenOutput {
+    fn write_line<T>(&mut self, content: T) -> Result<(), HarnessError>
+        where T: Display;
+    fn indent_up(&mut self);
+    fn indent_down(&mut self);
+    fn skip_newline(&mut self);
+    fn flush(&mut self) -> Result<(), HarnessError>;
+}
 
 pub struct WriteCodegenOutput<'a, Output: Write> {
     output: &'a mut Output,

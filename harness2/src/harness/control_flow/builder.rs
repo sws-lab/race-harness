@@ -44,7 +44,7 @@ impl ControlFlowBuilder {
         let mut visited = HashSet::new();
         let mut queue = Vec::from([(root, Rc::new(Vec::new()))]);
         while !queue.is_empty() {
-            let (current_state, current_path) = queue.pop().unwrap();
+            let (current_state, current_path) = queue.pop().expect("Expected queue to be non-empty");
             if visited.contains(&current_state) {
                 continue;
             }
@@ -87,7 +87,7 @@ impl ControlFlowBuilder {
         let node = if edge_nodes.len() > 1 {
             ControlFlowNode::Branch(edge_nodes)
         } else if !edge_nodes.is_empty() {
-            edge_nodes.pop().unwrap()
+            edge_nodes.pop().expect("Expected control-flow node list to be non-empty")
         } else {
             ControlFlowNode::Sequence(Vec::new())
         };

@@ -1,6 +1,6 @@
 use crate::harness::{control_flow::mutex::ControlFlowMutexID, core::{error::HarnessError, process::ProcessID}};
 
-use super::base::{CodegenOutput, ControlFlowCodegen};
+use super::{codegen::ControlFlowCodegen, output::CodegenOutput};
 
 pub struct ControlFlowGoblintCodegen;
 
@@ -13,8 +13,6 @@ impl ControlFlowGoblintCodegen {
 impl<Output: CodegenOutput> ControlFlowCodegen<Output> for ControlFlowGoblintCodegen {
     fn generate_prologue(&self, output: &mut Output) -> Result<(), HarnessError> {
         self.embed_multiline(output, r#"
-extern _Atomic long _harness_random;
-
 typedef unsigned int __harness_thread_t;
 typedef unsigned int __harness_mutex_t;
 extern void __harness_thread_create(__harness_thread_t *, void *, void *(*)(void *), void *);
@@ -22,6 +20,7 @@ extern void __harness_thread_join(__harness_thread_t, void **);
 extern void __harness_mutex_init(__harness_mutex_t *, void *);
 extern void __harness_mutex_lock(__harness_mutex_t *);
 extern void __harness_mutex_unlock(__harness_mutex_t *);
+extern int __harness_rand(void);
 "#)?;
         Ok(())
     }
@@ -138,6 +137,6 @@ extern void __harness_mutex_unlock(__harness_mutex_t *);
     }
 
     fn generate_random(&self, max: u32) -> String {
-        format!("(_harness_random % {})", max)
+        format!("(__harness_rand() % {})", max)
     }
 }

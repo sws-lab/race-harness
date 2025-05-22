@@ -81,7 +81,7 @@ impl StateMachineProductNodeBuilder {
         let mut inbound_product_messages = HashMap::new();
         let mut outbound_response_messages = HashMap::new();
         while !queue.is_empty() {
-            let entry = queue.pop().unwrap();
+            let entry = queue.pop().expect("Expected queue to be non-empty");
             if visited.contains(&entry) {
                 continue;
             }
@@ -99,7 +99,7 @@ impl StateMachineProductNodeBuilder {
 
             for i in 0..self.count() {
                 inbound_product_messages.entry(i).or_insert(HashMap::new());
-                let edges = context.get_edges_from(*entry.0.get(i).unwrap())
+                let edges = context.get_edges_from(*entry.0.get(i).expect("Expected product entry to have a node at index"))
                     .ok_or(HarnessError::new("Unable to find edges coming from node for product node construction"))?
                     .collect::<Vec<_>>();
                 for edge in edges {
@@ -117,7 +117,7 @@ impl StateMachineProductNodeBuilder {
                     };
                     let trigger: Option<StateMachineMessageID> = match context.get_edge_trigger(edge) {
                         Some(msg) => {
-                            let product_msg = match inbound_product_messages.get(&i).unwrap().get(&msg){
+                            let product_msg = match inbound_product_messages.get(&i).expect("Expected inbound product messages to have a message mapping").get(&msg){
                                 Some(product_msg) => *product_msg,
                                 None => {
                                     let product_msg = context.new_message(StateMachineProductNodeBuilder::get_product_message_mnemonic(i, self.count(), context.get_message_mnemonic(msg).ok_or(HarnessError::new("Unable to find message mnemonic for product message construction"))?))?;

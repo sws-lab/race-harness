@@ -52,7 +52,7 @@ impl ControlFlowNode {
                     }
                 }
                 if new_sequence.len() == 1 {
-                    return new_sequence.pop().unwrap();
+                    return new_sequence.pop().expect("Expected control-flow node sequence to be non-empty");
                 } else {
                     Self::Sequence(new_sequence)
                 }

@@ -193,7 +193,7 @@ impl<'a> ProcessSetMutualExclusion<'a> {
         let reachable_nodes = context.get_nodes_reachable_from(process_entry_node)?;
         for state in reachable_nodes.into_iter() {
             let state_segments = self.process_generate_mutual_exclusion_segments(context, process_set, process, state, segments)?;
-            if !segments.contains_key(&state) || segments.get(&state).unwrap().symmetric_difference(&state_segments).count() > 0 {
+            if !segments.contains_key(&state) || segments.get(&state).expect("Expected mutual exclusion segment to exist for a state").symmetric_difference(&state_segments).count() > 0 {
                 segments.insert(state, state_segments);
                 return Ok(false);
             }
@@ -297,7 +297,7 @@ impl<'a> ProcessSetMutualExclusion<'a> {
             for state_segment in state_segments {
                 let new_state_segment = segment_index.get(&state_segment)
                     .or(Some(&state_segment))
-                    .unwrap()
+                    .expect("Expected mutual exclusion segment to exist")
                     .extend(process, state);
                 segment_index.insert(state_segment, new_state_segment);
             }
