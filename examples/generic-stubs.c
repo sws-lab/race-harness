@@ -15,7 +15,7 @@
 #include "linux/export-internal.h"
 #include "linux/module.h"
 
-extern _Atomic int RANDOM;
+extern int __harness_rand(void);
 
 // __raw_spin_lock_init [include/linux/spinlock.h line 101 column 15]
 extern void __raw_spin_lock_init(raw_spinlock_t *lock, const char *name,
@@ -54,12 +54,12 @@ extern size_t __real_strlcat(char *p, const char *q, size_t avail) {
 
 // __real_strnlen [include/linux/fortify-string.h line 208 column 24]
 extern __kernel_size_t __real_strnlen(const char *s, __kernel_size_t x) {
-	return RANDOM;
+	return __harness_rand();
 }
 
 // __real_strscpy [include/linux/fortify-string.h line 276 column 16]
 extern ssize_t __real_strscpy(char *s, const char *x, size_t b) {
-	return RANDOM;
+	return __harness_rand();
 }
 
 // __write_overflow [include/linux/fortify-string.h line 60 column 6]

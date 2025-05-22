@@ -19,8 +19,6 @@
 #include "linux/serial.h"
 #include "linux/tty.h"
 
-extern _Atomic int RANDOM;
-
 struct ktermios tty_std_termios = {0};
 
 struct tty_driver *__tty_alloc_driver(unsigned int lines, struct module *owner, unsigned long flags) {
