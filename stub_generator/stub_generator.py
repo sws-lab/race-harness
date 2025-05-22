@@ -39,13 +39,13 @@ class StubGeneratorProfile:
         )
 
 class StubGenerator:
-    def __init__(self, db: CompilationDatabase, build_id: str, profile: StubGeneratorProfile):
+    def __init__(self, db: CompilationDatabase, build_id: str, profile: StubGeneratorProfile, include_symbols: Optional[Callable[[cindex.Cursor], bool]]):
         self._db = db
         self._build = db.kernel_build(build_id)
         self._profile = profile
         if self._build is None:
             raise StubGeneratorError(f'Unable to find kernel build {build_id}')
-        self._scanner = UndefinedReferenceScanner(profile=profile.scanner_profile)
+        self._scanner = UndefinedReferenceScanner(profile=profile.scanner_profile, include_symbols=include_symbols)
         self._compiler_command_line_sample = None
 
     def load(self, input: str):
@@ -121,12 +121,12 @@ class StubGenerator:
             return include_path
         
     def _filter_command_line(self, cmdline: List[str]) -> List[str]:
-        semicolon_index = cmdline.index(';')
-        if semicolon_index is not None:
+        if ';' in cmdline:
+            semicolon_index = cmdline.index(';')
             cmdline = cmdline[:semicolon_index]
         
-        output_index = cmdline.index('-o')
-        if output_index is not None:
+        if '-o' in cmdline:
+            output_index = cmdline.index('-o')
             del cmdline[output_index + 1]
             del cmdline[output_index]
         
@@ -233,6 +233,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog=prog_basename, description='Stub generator for Linux kernel module external dependencies')
     parser.add_argument('--db', type=str, required=True, help='Kernel compilation database path')
     parser.add_argument('--build-id', type=str, required=False, help='Kernel build identifier')
+    parser.add_argument('--include', action='append', help='Regular expressions for symbols included into scan list')
     parser.add_argument('--blacklist', action='append', help='Regular expressions for blacklisted symbols')
     parser.add_argument('--quiet', action='store_true', default=False, help='Suppress all logging')
     parser.add_argument('input', nargs='+', help='List of kernel objects and external stub files')
@@ -246,10 +247,24 @@ if __name__ == '__main__':
     else:
         blacklist_regexps = list()
 
+    if args.include:
+        include_regexps = [
+            re.compile(entry)
+            for entry in args.include
+        ]
+    else:
+        include_regexps = list()
+
     def blacklist_callback(node: cindex.Cursor):
         return any(
             entry.match(node.spelling) for entry in blacklist_regexps
         )
+    
+    def include_callback(node: cindex.Cursor):
+        return any(
+            entry.match(node.spelling) for entry in include_regexps
+        )
+        
     
     logger = logging.Logger(prog_basename)
     if not args.quiet:
@@ -269,7 +284,7 @@ if __name__ == '__main__':
                 sys.exit(-1)
         logger.info('Using kernel build %s', build.identifier)
             
-        stub_generator = StubGenerator(db, build.identifier, StubGeneratorProfile.linux_kernel())
+        stub_generator = StubGenerator(db, build.identifier, StubGeneratorProfile.linux_kernel(), include_callback)
         for input in args.input:
             stub_generator.load(input)
         print(stub_generator.generate_stubs(blacklist_callback))

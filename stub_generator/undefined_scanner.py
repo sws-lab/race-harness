@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Iterable, Container, Collection
+from typing import Iterable, Container, Collection, Optional, Callable
 import clang.cindex as cindex
 
 class UndefinedReferenceScannerError(BaseException): pass
@@ -18,7 +18,7 @@ class UndefinedReferenceScannerProfile:
         )
 
 class UndefinedReferenceScanner:
-    def __init__(self, profile: UndefinedReferenceScannerProfile):
+    def __init__(self, profile: UndefinedReferenceScannerProfile, include_symbols: Optional[Callable[[cindex.Cursor], bool]]):
         self._index = cindex.Index.create()
         self._profile = profile
         self._used_function_usrs = set()
@@ -28,6 +28,7 @@ class UndefinedReferenceScanner:
         self._entity_index = dict()
         self._includes = list()
         self._traversed = set()
+        self._include_symbols = include_symbols
 
     def load(self, *args, **kwargs):
         unit = self._index.parse(*args, **kwargs)
@@ -62,7 +63,7 @@ class UndefinedReferenceScanner:
         return self._includes
     
     def _is_external_decl(self, node: cindex.Cursor):
-        if node.linkage == cindex.LinkageKind.EXTERNAL:
+        if node.linkage == cindex.LinkageKind.EXTERNAL or (self._include_symbols is not None and self._include_symbols(node)):
             return True
     
         for token in node.get_tokens():
