@@ -66,17 +66,21 @@ compile_db/query_compilation_database.py  --db kernel/linux-6.14.1.db --build-id
 compile_db/query_compilation_database.py  --db kernel/linux-6.14.1.db --build-id 27fc3ea7-1240-4223-9977-56c56a22c9f0 --target drivers/char/ttyprintk.ko --query-all-deps # See above comment
 
 # Determine chosen module dependencies and prepare stubs
-./stub_generator/stub_generator.py --db kernel/linux-6.14.1.db --build-id 27fc3ea7-1240-4223-9977-56c56a22c9f0 drivers/char/ttyprintk.ko --blacklist ".*builtin.*" --blacklist ".*compiletime.*" --blacklist ".*fortify.*" > stubs.c # Generate stub skeleton
+./stub_generator/stub_generator.py --db kernel/linux-6.14.1.db --build-id 27fc3ea7-1240-4223-9977-56c56a22c9f0 drivers/char/ttyprintk.ko --blacklist ".*builtin.*" --blacklist ".*compiletime.*" --blacklist ".*fortify.*" > ~/ttyprintk-stubs.c 
+./stub_generator/stub_generator.py --db kernel/linux-6.14.1.db .examples/generic-stubs.c  drivers/input/misc/pcspkr.ko --blacklist ".*builtin.*" --blacklist ".*compiletime.*" --blacklist ".*fortify.*" --blacklist "pcpu_hot" --blacklist "const_pcpu_hot" --include "pcspkr_platform_driver_init" --include "pcspkr_platform_driver_exit" > ~/pcspkr-stubs.c
+# Generate stub skeleton
 # Fill-in stubs.c
-./stub_generator/stub_generator.py --db kernel/linux-6.14.1.db --build-id 27fc3ea7-1240-4223-9977-56c56a22c9f0 drivers/char/ttyprintk.ko stubs.c --blacklist ".*builtin.*" --blacklist ".*compiletime.*" --blacklist ".*fortify.*" # See what is missing
+./stub_generator/stub_generator.py --db kernel/linux-6.14.1.db --build-id 27fc3ea7-1240-4223-9977-56c56a22c9f0 drivers/char/ttyprintk.ko ~/ttyprintk-stubs.c  --blacklist ".*builtin.*" --blacklist ".*compiletime.*" --blacklist ".*fortify.*"
+# See what is missing
 
 # Generate harness
 cd harness2
 cargo build --release
-./target/release/harness2 >/dev/null 2> ~/ttyprintk-harness.c
+HARNESS_EXAMPLE=ttyprintk ./target/release/harness2 >/dev/null 2> ~/ttyprintk-harness.c
+HARNESS_EXAMPLE=pcspkr ./target/release/harness2 >/dev/null 2> ~/pcspkr-harness.c
 
 # Run Goblint on the chosen module + stubs
 ./goblint_driver/goblint_driver.py --db kernel/linux-6.14.1.db --goblint ~/goblint/analyzer/goblint  drivers/char/ttyprintk.ko ~/ttyprintk-stubs.c ~/ttyprintk-harness.c
 # Or some other module
-./goblint_driver/goblint_driver.py --db kernel/linux-6.14.1.db --goblint ~/goblint/analyzer/goblint  sound/usb/snd-usbmidi-lib.ko ~/snd-usbmidi-lib-stubs.c ~/snd-usbmidi-lib-harness.c
+./goblint_driver/goblint_driver.py --db kernel/linux-6.14.1.db --goblint ~/goblint/analyzer/goblint  drivers/input/misc/pcspkr.ko ~/pcspkr-stubs.c ~/pcspkr-harness.c
 ```
