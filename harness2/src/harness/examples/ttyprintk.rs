@@ -169,7 +169,8 @@ impl HarnessExample for TtyPrintkExample {
     }
 
     fn executable_codegen<Output: CodegenOutput>(&self, model: &Self::Model) -> Result<(CodegenTemplate, impl ControlFlowCodegen<Output>), HarnessError> {
-        let mut template = CodegenTemplate::new().set_global_prologue(Some(r#"
+        let mut template = CodegenTemplate::new();
+        template.set_global_prologue(Some(r#"
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
@@ -201,7 +202,7 @@ printf("Client %client_id% active\n");
 "#);
 
         for (index, client) in model.tty_clients.iter().enumerate() {
-            template = template.set_process_parameter(*client, "client_id", format!("{}", index));
+            template.set_process_parameter(*client, "client_id", format!("{}", index));
         }
 
         let codegen = ControlFlowExecutableCodegen::new();
@@ -209,7 +210,8 @@ printf("Client %client_id% active\n");
     }
 
     fn goblint_codegen<Output: CodegenOutput>(&self, model: &Self::Model) -> Result<(CodegenTemplate, impl ControlFlowCodegen<Output>), HarnessError> {
-        let mut template = CodegenTemplate::new().set_global_prologue(Some(r#"
+        let mut template = CodegenTemplate::new();
+        template.set_global_prologue(Some(r#"
 #include "linux/compiler_types.h"
 #include "linux/kconfig.h"
 #include "asm/orc_header.h"
@@ -231,7 +233,7 @@ extern struct tty_driver *registered_tty_driver;
    .define_action(model.tty_client_use_connection_action, r#"registered_tty_driver->ops->write(&tty, content, sizeof(content));"#);
 
         for (index, client) in model.tty_clients.iter().enumerate() {
-            template = template.set_process_parameter(*client, "client_id", index.to_string())
+            template.set_process_parameter(*client, "client_id", index.to_string())
                 .set_process_prologue(*client, r#"
 struct tty_struct tty;
 struct file file;

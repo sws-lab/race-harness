@@ -83,7 +83,8 @@ impl HarnessExample for PcspkrExample {
     }
 
     fn executable_codegen<Output: CodegenOutput>(&self, model: &Self::Model) -> Result<(CodegenTemplate, impl ControlFlowCodegen<Output>), HarnessError> {
-        let template = CodegenTemplate::new().set_global_prologue(Some(r#"
+        let mut template = CodegenTemplate::new();
+        template.set_global_prologue(Some(r#"
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
@@ -97,7 +98,8 @@ _Atomic unsigned int activity = 0;
     }
 
     fn goblint_codegen<Output: CodegenOutput>(&self, model: &Self::Model) -> Result<(CodegenTemplate, impl ControlFlowCodegen<Output>), HarnessError> {
-        let mut template = CodegenTemplate::new().set_global_prologue(Some(r#"
+        let mut template = CodegenTemplate::new();
+        template.set_global_prologue(Some(r#"
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/i8253.h>
@@ -109,11 +111,11 @@ _Atomic unsigned int activity = 0;
 extern struct platform_driver pcspkr_platform_driver;
 "#));
         for driver in &model.pcspkr_drivers {
-            template = template.set_process_prologue(*driver, r#"
+            template.set_process_prologue(*driver, r#"
 struct platform_device platform_dev;
 "#);
         }
-        template = template
+        template
             .define_action(model.pcspkr_driver_probe_action, "pcspkr_platform_driver.probe(&platform_dev);")
             .define_action(model.pcspkr_driver_send_event_action, "((struct input_dev *) platform_dev.dev.driver_data)->event(((struct input_dev *) platform_dev.dev.driver_data), EV_SND, SND_BELL, 1000);")
             .define_action(model.pcspkr_driver_shutdown_action, "pcspkr_platform_driver.shutdown(&platform_dev);")

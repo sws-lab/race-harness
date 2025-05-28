@@ -20,13 +20,13 @@ impl CodegenTemplate {
         }
     }
 
-    pub fn set_global_prologue<T>(mut self, prologue: Option<T>) -> Self
+    pub fn set_global_prologue<T>(&mut self, prologue: Option<T>) -> &mut Self
         where T: Into<String> {
         self.global_prologue = prologue.map(| content | content.into());
         self
     }
 
-    pub fn set_process_parameter<T>(mut self, process: ProcessID, name: &str, value: T) -> Self
+    pub fn set_process_parameter<T>(&mut self, process: ProcessID, name: &str, value: T) -> &mut Self
         where T: Into<String> {
         self.process_parameters.entry(process)
             .or_default()
@@ -34,13 +34,13 @@ impl CodegenTemplate {
         self
     }
 
-    pub fn set_process_prologue<T>(mut self, process: ProcessID, prologue: T) -> Self
+    pub fn set_process_prologue<T>(&mut self, process: ProcessID, prologue: T) -> &mut Self
         where T: Into<String> {
         self.process_prologues.insert(process, prologue.into());
         self
     }
 
-    pub fn define_action<T>(mut self, action: StateMachineActionID, content: T) -> Self
+    pub fn define_action<T>(&mut self, action: StateMachineActionID, content: T) -> &mut Self
         where T: Into<String> {
         self.actions.insert(action, content.into());
         self
