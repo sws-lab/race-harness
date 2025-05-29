@@ -1,6 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc, sync::Arc};
-
-use mlua::{AnyUserData, FromLua, IntoLua, Lua, UserData, UserDataMethods};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use crate::harness::{builder::builder::{HarnessBuilder, HarnessBuilderSymbolID}, core::error::HarnessError};
 
@@ -46,8 +44,8 @@ impl TemplateSymbolLuaValue {
     }
 }
 
-impl UserData for TemplateSymbolLuaValue {
-    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+impl mlua::UserData for TemplateSymbolLuaValue {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("unicast", | _, this, (destination, message): (mlua::Value, mlua::Value) | {
             this.harness.borrow_mut()
                 .new_unicast_envelope(this.symbol, into_symbol(destination)?, into_symbol(message)?)
@@ -86,14 +84,14 @@ impl UserData for TemplateSymbolLuaValue {
 
         methods.add_method("setup", | _, this, prologue: String | {
             this.harness.borrow_mut()
-                .set_process_prologue(this.symbol, prologue)
+                .append_process_prologue(this.symbol, prologue)
                 .map_err(map_harness_error)?;
             Ok(this.clone())
         });
 
         methods.add_meta_method("__newindex", | _, this, (key, value): (String, mlua::Value) | {
             this.harness.borrow_mut()
-                .set_process_parameters(this.symbol, key, value.to_string()?)
+                .set_process_parameter(this.symbol, key, value.to_string()?)
                 .map_err(map_harness_error)?;
             Ok(this.clone())
         });
@@ -123,7 +121,7 @@ impl LuaTemplateInterpreter {
         LuaTemplateInterpreter {}
     }
 
-    fn initialize<'a, 'b: 'a>(&self, harness: Rc<RefCell<HarnessBuilder>>, lua: &'b mut Lua) -> Result<(), HarnessError> {
+    fn initialize<'a, 'b: 'a>(&self, harness: Rc<RefCell<HarnessBuilder>>, lua: &'b mut mlua::Lua) -> Result<(), HarnessError> {
         {
             let harness = harness.clone();
             let new_state_fn = lua.create_function(move |lua, mnemonic: String| {
@@ -149,7 +147,7 @@ impl LuaTemplateInterpreter {
         {
             let harness = harness.clone();
             let new_edge_fn = lua.create_function(move |_, (source, target, trigger, action): (mlua::Value, mlua::Value, mlua::Value, mlua::Value)| {
-                let edge = harness.borrow_mut().new_edge(into_symbol(source)?, into_symbol(target)?, into_optional_symbol(trigger)?, into_optional_symbol(action)?)
+                harness.borrow_mut().new_edge(into_symbol(source)?, into_symbol(target)?, into_optional_symbol(trigger)?, into_optional_symbol(action)?)
                     .map_err(map_harness_error)?;
                 Ok(())
             }).map_err(map_lua_error)?;
@@ -180,7 +178,7 @@ impl LuaTemplateInterpreter {
         Ok(())
     }
 
-    fn interpret_template(&self, template: &TemplateFragment, harness: Rc<RefCell<HarnessBuilder>>, lua: &mut Lua) -> Result<(), HarnessError> {
+    fn interpret_template(&self, template: &TemplateFragment, harness: Rc<RefCell<HarnessBuilder>>, lua: &mut mlua::Lua) -> Result<(), HarnessError> {
         let sequence = match template {
             TemplateFragment::VerbatimSequence(elts) => elts,
             _ => return Err(HarnessError::new("Expected top-level template fragment to be a verbatim sequence"))
@@ -188,7 +186,7 @@ impl LuaTemplateInterpreter {
 
         for elt in sequence {
             match elt {
-                TemplateFragment::Literal(content) => harness.borrow_mut().set_global_prologue(content.clone()),
+                TemplateFragment::Literal(content) => harness.borrow_mut().append_global_prologue(content.clone()),
                 TemplateFragment::VerbatimSequence(_) => return Err(HarnessError::new("Unexpected nested verbatim sequence in the template")),
                 TemplateFragment::InterpretedSequence(seq) => self.interpret_top_level_code(seq.iter(), lua)?
             }
@@ -197,7 +195,7 @@ impl LuaTemplateInterpreter {
         Ok(())
     }
 
-    fn interpret_top_level_code<'a>(&self, sequence: impl Iterator<Item = &'a TemplateFragment>, lua: &mut Lua) -> Result<(), HarnessError> {
+    fn interpret_top_level_code<'a>(&self, sequence: impl Iterator<Item = &'a TemplateFragment>, lua: &mut mlua::Lua) -> Result<(), HarnessError> {
         let mut code = String::new();
         for subelt in sequence {
             match subelt {
@@ -230,7 +228,7 @@ impl LuaTemplateInterpreter {
 
     pub fn interpret(&mut self, template: &TemplateFragment) -> Result<HarnessBuilder, HarnessError> {
         let harness = Rc::new(RefCell::new(HarnessBuilder::new()));
-        let mut lua = Lua::new();
+        let mut lua = mlua::Lua::new();
         self.initialize(harness.clone(), &mut lua)?;
         self.interpret_template(template, harness.clone(), &mut lua)?;
         Ok(harness.replace(HarnessBuilder::new()))
