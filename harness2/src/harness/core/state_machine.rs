@@ -25,9 +25,18 @@ pub enum StateMachineMessageDestination {
     Response
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum StateMachineMessageEnvelopeBehavior {
+    BlockAnyMessage,
+    BlockSameMessage,
+    ReplaceAnyMessage,
+    ReplaceSameMessage
+}
+
 #[derive(Debug, Clone)]
 pub struct StateMachineMessageEnvelope {
     destination: StateMachineMessageDestination,
+    behavior: StateMachineMessageEnvelopeBehavior,
     message: StateMachineMessageID
 }
 
@@ -73,6 +82,10 @@ impl StateMachineMessageEnvelope {
         &self.destination
     }
 
+    pub fn get_behavior(&self) -> StateMachineMessageEnvelopeBehavior {
+        self.behavior
+    }
+
     pub fn get_message(&self) -> StateMachineMessageID {
         self.message
     }
@@ -80,6 +93,7 @@ impl StateMachineMessageEnvelope {
     pub fn redirect(&self, destination: StateMachineMessageDestination) -> StateMachineMessageEnvelope {
         StateMachineMessageEnvelope {
             destination,
+            behavior: self.behavior,
             message: self.message
         }
     }
@@ -155,11 +169,12 @@ impl<'a> StateMachineContext {
         Ok(edge_id)
     }
 
-    pub fn add_envelope(&mut self, action: StateMachineActionID, destination: StateMachineMessageDestination, message: StateMachineMessageID) -> Result<(), HarnessError> {
+    pub fn add_envelope(&mut self, action: StateMachineActionID, destination: StateMachineMessageDestination, behavior: StateMachineMessageEnvelopeBehavior, message: StateMachineMessageID) -> Result<(), HarnessError> {
         match self.actions.get_mut(&action) {
             Some(action_data) => {
                 action_data.envelopes.push(StateMachineMessageEnvelope {
                     destination,
+                    behavior,
                     message
                 });
                 Ok(())

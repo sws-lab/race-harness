@@ -1,6 +1,6 @@
 use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::Arc};
 
-use crate::harness::{builder::builder::{HarnessBuilder, HarnessBuilderSymbol}, core::error::HarnessError};
+use crate::harness::{builder::builder::{HarnessBuilder, HarnessBuilderSymbol}, core::{error::HarnessError, state_machine::StateMachineMessageEnvelopeBehavior}};
 
 use super::parser::TemplateFragment;
 
@@ -10,6 +10,13 @@ pub struct LuaTemplateInterpreter {}
 struct TemplateSymbolLuaValue {
     harness: Rc<RefCell<HarnessBuilder>>,
     symbol: HarnessBuilderSymbol
+}
+
+enum EnvelopeBehavior {
+    BlockAny = 1,
+    BlockSame = 2,
+    ReplaceAny = 3,
+    ReplaceSame = 4
 }
 
 fn into_symbol(value: mlua::Value) -> mlua::Result<HarnessBuilderSymbol> {
@@ -38,6 +45,36 @@ fn map_harness_error(err: HarnessError) -> mlua::Error {
     mlua::Error::ExternalError(Arc::new(err))
 }
 
+impl mlua::IntoLua for EnvelopeBehavior {
+    fn into_lua(self, _: &mlua::Lua) -> mlua::Result<mlua::Value> {
+        Ok(mlua::Value::Integer(self as i64))
+    }
+}
+
+impl mlua::FromLua for EnvelopeBehavior {
+    fn from_lua(value: mlua::Value, _: &mlua::Lua) -> mlua::Result<Self> {
+        let ivalue = value.as_i64().ok_or(mlua::Error::FromLuaConversionError { from: value.type_name(), to: "EnvelopeBehavior".into(), message: None })?;
+        match ivalue {
+            x if x == EnvelopeBehavior::BlockAny as i64 => Ok(EnvelopeBehavior::BlockAny),
+            x if x == EnvelopeBehavior::BlockSame as i64 => Ok(EnvelopeBehavior::BlockSame),
+            x if x == EnvelopeBehavior::ReplaceAny as i64 => Ok(EnvelopeBehavior::ReplaceAny),
+            x if x == EnvelopeBehavior::ReplaceSame as i64 => Ok(EnvelopeBehavior::ReplaceSame),
+            _ => Err(mlua::Error::FromLuaConversionError { from: value.type_name(), to: "EnvelopeBehavior".into(), message: None })
+        }
+    }
+}
+
+impl From<EnvelopeBehavior> for StateMachineMessageEnvelopeBehavior {
+    fn from(value: EnvelopeBehavior) -> Self {
+        match value {
+            EnvelopeBehavior::BlockAny => StateMachineMessageEnvelopeBehavior::BlockAnyMessage,
+            EnvelopeBehavior::BlockSame => StateMachineMessageEnvelopeBehavior::BlockSameMessage,
+            EnvelopeBehavior::ReplaceAny => StateMachineMessageEnvelopeBehavior::ReplaceAnyMessage,
+            EnvelopeBehavior::ReplaceSame => StateMachineMessageEnvelopeBehavior::ReplaceSameMessage
+        }
+    }
+}
+
 impl TemplateSymbolLuaValue {
     pub fn new(harness: Rc<RefCell<HarnessBuilder>>, symbol: HarnessBuilderSymbol) -> TemplateSymbolLuaValue {
         TemplateSymbolLuaValue { harness, symbol }
@@ -46,14 +83,14 @@ impl TemplateSymbolLuaValue {
 
 impl mlua::UserData for TemplateSymbolLuaValue {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("unicast", | _, this, (destination, message): (mlua::Value, mlua::Value) | {
+        methods.add_method("unicast", | _, this, (destination, behavior, message): (mlua::Value, EnvelopeBehavior, mlua::Value) | {
             this.harness.borrow_mut()
-                .new_unicast_envelope(this.symbol, into_symbol(destination)?, into_symbol(message)?)
+                .new_unicast_envelope(this.symbol, into_symbol(destination)?, behavior.into(), into_symbol(message)?)
                 .map_err(map_harness_error)?;
             Ok(this.clone())
         });
 
-        methods.add_method("multicast", | _, this, (destinations, message): (mlua::Value, mlua::Value) | {
+        methods.add_method("multicast", | _, this, (destinations, behavior, message): (mlua::Value, EnvelopeBehavior, mlua::Value) | {
             let destinations = destinations.as_table()
                 .ok_or(mlua::Error::FromLuaConversionError { from: destinations.type_name(), to: "[TemplateSymbolLuaValue]".into(), message: None })?
                 .pairs::<mlua::Value, mlua::Value>()
@@ -63,14 +100,14 @@ impl mlua::UserData for TemplateSymbolLuaValue {
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             this.harness.borrow_mut()
-                .new_multicast_envelope(this.symbol, destinations.into_iter(), into_symbol(message)?)
+                .new_multicast_envelope(this.symbol, destinations.into_iter(), behavior.into(), into_symbol(message)?)
                 .map_err(map_harness_error)?;
             Ok(this.clone())
         });
 
-        methods.add_method("respond", | _, this, message: mlua::Value | {
+        methods.add_method("respond", | _, this, (behavior, message): (EnvelopeBehavior, mlua::Value) | {
             this.harness.borrow_mut()
-                .new_response_envelope(this.symbol, into_symbol(message)?)
+                .new_response_envelope(this.symbol, behavior.into(), into_symbol(message)?)
                 .map_err(map_harness_error)?;
             Ok(this.clone())
         });
@@ -189,6 +226,11 @@ impl LuaTemplateInterpreter {
             }).map_err(map_lua_error)?;
             lua.globals().set("include", include_fn).map_err(map_lua_error)?;
         }
+
+        lua.globals().set("BLOCK_ANY", EnvelopeBehavior::BlockAny).map_err(map_lua_error)?;
+        lua.globals().set("BLOCK_SAME", EnvelopeBehavior::BlockSame).map_err(map_lua_error)?;
+        lua.globals().set("REPLACE_ANY", EnvelopeBehavior::ReplaceAny).map_err(map_lua_error)?;
+        lua.globals().set("REPLACE_SAME", EnvelopeBehavior::ReplaceSame).map_err(map_lua_error)?;
         Ok(())
     }
 

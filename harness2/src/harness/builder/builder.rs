@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
-use crate::harness::{codegen::template::CodegenTemplate, core::{error::HarnessError, process::{ProcessID, ProcessSet}, state_machine::{StateMachineActionID, StateMachineContext, StateMachineMessageDestination, StateMachineMessageID, StateMachineMessageParticipantID, StateMachineNodeID}}, entities::product_node::{StateMachineProductNode, StateMachineProductNodeBuilder}};
+use crate::harness::{codegen::template::CodegenTemplate, core::{error::HarnessError, process::{ProcessID, ProcessSet}, state_machine::{StateMachineActionID, StateMachineContext, StateMachineMessageDestination, StateMachineMessageEnvelopeBehavior, StateMachineMessageID, StateMachineMessageParticipantID, StateMachineNodeID}}, entities::product_node::{StateMachineProductNode, StateMachineProductNodeBuilder}};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub struct HarnessBuilderSymbolID(u64);
@@ -36,9 +36,9 @@ struct HarnessEdgeBuilder {
 }
 
 enum HarnessEnvelopeBuilder {
-    Unicast(HarnessBuilderSymbol, HarnessBuilderSymbol),
-    Multicast(Vec<HarnessBuilderSymbol>, HarnessBuilderSymbol),
-    Response(HarnessBuilderSymbol)
+    Unicast(HarnessBuilderSymbol, StateMachineMessageEnvelopeBehavior, HarnessBuilderSymbol),
+    Multicast(Vec<HarnessBuilderSymbol>, StateMachineMessageEnvelopeBehavior, HarnessBuilderSymbol),
+    Response(StateMachineMessageEnvelopeBehavior, HarnessBuilderSymbol)
 }
 
 struct HarnessActionBuilder {
@@ -202,7 +202,7 @@ impl HarnessBuilder {
         Ok(())
     }
 
-    pub fn new_unicast_envelope(&mut self, action: HarnessBuilderSymbol, destination: HarnessBuilderSymbol, message: HarnessBuilderSymbol) -> Result<(), HarnessError> {
+    pub fn new_unicast_envelope(&mut self, action: HarnessBuilderSymbol, destination: HarnessBuilderSymbol, behavior: StateMachineMessageEnvelopeBehavior, message: HarnessBuilderSymbol) -> Result<(), HarnessError> {
         let action = match self.actions.get_mut(&action) {
             Some(action) => action,
             None => return Err(HarnessError::new("Unknown action symbol"))
@@ -214,11 +214,11 @@ impl HarnessBuilder {
             return Err(HarnessError::new("Unknown envelope message symbol"));
         }
 
-        action.envelopes.push(HarnessEnvelopeBuilder::Unicast(destination, message));
+        action.envelopes.push(HarnessEnvelopeBuilder::Unicast(destination, behavior, message));
         Ok(())
     }
 
-    pub fn new_multicast_envelope(&mut self, action: HarnessBuilderSymbol, destinations: impl Iterator<Item = HarnessBuilderSymbol>, message: HarnessBuilderSymbol) -> Result<(), HarnessError> {
+    pub fn new_multicast_envelope(&mut self, action: HarnessBuilderSymbol, destinations: impl Iterator<Item = HarnessBuilderSymbol>, behavior: StateMachineMessageEnvelopeBehavior, message: HarnessBuilderSymbol) -> Result<(), HarnessError> {
         let action = match self.actions.get_mut(&action) {
             Some(action) => action,
             None => return Err(HarnessError::new("Unknown action symbol"))
@@ -231,11 +231,11 @@ impl HarnessBuilder {
             return Err(HarnessError::new("Unknown envelope message symbol"));
         }
 
-        action.envelopes.push(HarnessEnvelopeBuilder::Multicast(destinations, message));
+        action.envelopes.push(HarnessEnvelopeBuilder::Multicast(destinations, behavior, message));
         Ok(())
     }
 
-    pub fn new_response_envelope(&mut self, action: HarnessBuilderSymbol, message: HarnessBuilderSymbol) -> Result<(), HarnessError> {
+    pub fn new_response_envelope(&mut self, action: HarnessBuilderSymbol, behavior: StateMachineMessageEnvelopeBehavior, message: HarnessBuilderSymbol) -> Result<(), HarnessError> {
         let action = match self.actions.get_mut(&action) {
             Some(action) => action,
             None => return Err(HarnessError::new("Unknown action symbol"))
@@ -244,7 +244,7 @@ impl HarnessBuilder {
             return Err(HarnessError::new("Unknown envelope message symbol"));
         }
 
-        action.envelopes.push(HarnessEnvelopeBuilder::Response(message));
+        action.envelopes.push(HarnessEnvelopeBuilder::Response(behavior, message));
         Ok(())
     }
 
@@ -432,23 +432,23 @@ impl HarnessBuilder {
         for (action, action_builder) in actions {
             for envelope in &action_builder.envelopes {
                 match envelope {
-                    HarnessEnvelopeBuilder::Unicast(process_symbol, message_symbol) => {
+                    HarnessEnvelopeBuilder::Unicast(process_symbol, behavior, message_symbol) => {
                         let process = *builder.processes.get(process_symbol).expect("Expected process to exist");
                         let message = self.build_message(context, builder, *message_symbol)?;
-                        context.add_envelope(action, StateMachineMessageDestination::Unicast(process.into()), message)?;
+                        context.add_envelope(action, StateMachineMessageDestination::Unicast(process.into()), *behavior, message)?;
                     }
     
-                    HarnessEnvelopeBuilder::Multicast(process_symbols, message_symbol) => {
+                    HarnessEnvelopeBuilder::Multicast(process_symbols, behavior, message_symbol) => {
                         let processess = process_symbols.iter()
                             .map(| process_symbol | (*builder.processes.get(process_symbol).expect("Expected process to exist")).into())
                             .collect();
                         let message = self.build_message(context, builder, *message_symbol)?;
-                        context.add_envelope(action, StateMachineMessageDestination::Multicast(processess), message)?;
+                        context.add_envelope(action, StateMachineMessageDestination::Multicast(processess), *behavior, message)?;
                     }
     
-                    HarnessEnvelopeBuilder::Response(message_symbol) => {
+                    HarnessEnvelopeBuilder::Response(behavior, message_symbol) => {
                         let message = self.build_message(context, builder, *message_symbol)?;
-                        context.add_envelope(action, StateMachineMessageDestination::Response, message)?;
+                        context.add_envelope(action, StateMachineMessageDestination::Response, *behavior, message)?;
                     }
                 }
             }

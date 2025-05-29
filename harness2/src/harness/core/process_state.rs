@@ -1,12 +1,12 @@
-use std::{collections::{BTreeMap, HashSet}, hash::Hash};
+use std::{collections::{BTreeMap, BTreeSet, HashSet}, hash::Hash};
 
-use super::{error::HarnessError, process::{ProcessID, ProcessSet}, state_machine::{StateMachineContext, StateMachineEdgeID, StateMachineMessageEnvelope, StateMachineMessageID, StateMachineNodeID}};
+use super::{error::HarnessError, process::{ProcessID, ProcessSet}, state_machine::{StateMachineContext, StateMachineEdgeID, StateMachineMessageEnvelope, StateMachineMessageEnvelopeBehavior, StateMachineMessageID, StateMachineNodeID}};
 
 #[derive(Clone, Debug, Eq)]
 struct ProcessState {
     process_id: ProcessID,
     node: StateMachineNodeID,
-    inbox: BTreeMap<ProcessID, StateMachineMessageID>,
+    inbox: BTreeMap<ProcessID, BTreeSet<StateMachineMessageID>>,
 }
 
 #[derive(Clone, Debug, Eq)]
@@ -62,12 +62,14 @@ impl ProcessState {
     fn next_transitions(&self, context: &StateMachineContext, process_set: &ProcessSet) -> Result<Vec<(ProcessState, StateMachineEdgeID, Vec<StateMachineMessageEnvelope>)>, HarnessError> {
         let mut transitions = Vec::new();
         let mut has_triggered_transitions = false;
-        for (&origin, &trigger) in self.inbox.iter() {
-            let mut new_state = self.clone();
-            new_state.inbox.remove(&origin);
-            for transition in self.next_triggered_transitions(context, process_set, trigger, new_state)? {
-                transitions.push(transition);
-                has_triggered_transitions = true;
+        for (&origin, triggers) in self.inbox.iter() {
+            for &trigger in triggers {
+                let mut new_state = self.clone();
+                new_state.inbox.remove(&origin);
+                for transition in self.next_triggered_transitions(context, process_set, trigger, new_state)? {
+                    transitions.push(transition);
+                    has_triggered_transitions = true;
+                }
             }
         }
         if !has_triggered_transitions {
@@ -162,20 +164,15 @@ impl ProcessSetState {
 
     pub fn get_process_inbox(&self, process_id: ProcessID) -> Option<impl Iterator<Item = (ProcessID, StateMachineMessageID)>> {
         self.processes.get(&process_id)
-            .map(| process | process.inbox.iter().map(| (&sender, &msg) | (sender, msg)))
+            .map(| process | process.inbox.iter()
+                .map(| (&sender, msgs) | msgs.iter().map(move | &msg | (sender, msg))).flatten())
     }
 
     pub fn get_next_transitions(&self, context: &StateMachineContext, process_set: &ProcessSet) -> Result<Vec<(ProcessSetState, ProcessID, StateMachineEdgeID)>, HarnessError> {
         let mut transitions = Vec::new();
-        let mut active_communications = HashSet::new();
-        for (&receiver_id, process_state) in &self.processes {
-            for &sender_id in process_state.inbox.keys() {
-                active_communications.insert((sender_id, receiver_id));
-            }
-        }
 
         for process_state in self.processes.values() {
-            for transition in self.next_transitions_for(context, process_set, process_state, | receiver | active_communications.contains(&(process_state.process_id, receiver)))? {
+            for transition in self.next_transitions_for(context, process_set, process_state)? {
                 transitions.push(transition);
             }
         }
@@ -183,12 +180,12 @@ impl ProcessSetState {
         Ok(transitions)
     }
 
-    fn next_transitions_for(&self, context: &StateMachineContext, process_set: &ProcessSet, process_state: &ProcessState, has_active_communications: impl Fn(ProcessID) -> bool) -> Result<Vec<(ProcessSetState, ProcessID, StateMachineEdgeID)>, HarnessError> {
+    fn next_transitions_for(&self, context: &StateMachineContext, process_set: &ProcessSet, process_state: &ProcessState) -> Result<Vec<(ProcessSetState, ProcessID, StateMachineEdgeID)>, HarnessError> {
         let mut transitions = Vec::new();
         for (next_state, transition_edge, outbound_envelopes) in process_state.next_transitions(context, process_set)? {
             let mut new_process_set_state = self.clone();
             new_process_set_state.processes.insert(next_state.process_id, next_state);
-            let mut blocks_on_messaging = false;
+            let mut ignore_transition = false;
             for envelope in &outbound_envelopes {
                 let matching_destinations = self.processes.keys()
                     .map(| process_id | *process_id)
@@ -199,21 +196,32 @@ impl ProcessSetState {
                     })
                     .collect::<Result<Vec<ProcessID>, HarnessError>>()?;
                 for receiver_id in matching_destinations {
-                    if has_active_communications(receiver_id) {
-                        blocks_on_messaging = true;
+                    let message = process_set.map_inbound_message(receiver_id, process_state.process_id, envelope.get_message())?;
+                    let mailbox = new_process_set_state.processes.get_mut(&receiver_id)
+                        .ok_or(HarnessError::new("Unable to find receiver process for a message"))?
+                        .inbox.entry(process_state.process_id)
+                        .or_insert(BTreeSet::new());
+
+                    match envelope.get_behavior() {
+                        StateMachineMessageEnvelopeBehavior::BlockAnyMessage if !mailbox.is_empty() => ignore_transition = true,
+                        StateMachineMessageEnvelopeBehavior::BlockSameMessage if mailbox.contains(&message) => ignore_transition = true,
+                        StateMachineMessageEnvelopeBehavior::ReplaceAnyMessage => mailbox.clear(),
+                        _ => {}
+                    }
+                    
+                    if !ignore_transition {
+                        mailbox.insert(message);
+                    } else {
                         break;
                     }
-                    let message = process_set.map_inbound_message(receiver_id, process_state.process_id, envelope.get_message())?;
-                    new_process_set_state.processes.get_mut(&receiver_id)
-                        .ok_or(HarnessError::new("Unable to find receiver process for a message"))?
-                        .inbox.insert(process_state.process_id, message);
                 }
-                if blocks_on_messaging {
+
+                if ignore_transition {
                     break;
                 }
             }
 
-            if !blocks_on_messaging {
+            if !ignore_transition {
                 transitions.push((new_process_set_state, process_state.process_id, transition_edge));
             }
         }
