@@ -41,7 +41,7 @@ extern struct tty_driver *registered_tty_driver;
 @S('tty_driver_client_inactive_substate')
 @S('tty_driver_client_active_substate')
 
-@{
+@do
     tty_clients = {}
     for i = 1, 4 do
         tty_clients[i] = P('tty_client' .. i, tty_client_nodriver_state)
@@ -52,7 +52,8 @@ extern struct tty_driver *registered_tty_driver;
             const char content[] = "client%client_id%";
         ]])
     end
-}@
+end
+
 @P('tty_driver', tty_driver_unloaded_state)
 
 @tty_driver_client_inactive_substate:product('tty_driver_loaded_state', tty_clients)
@@ -87,8 +88,18 @@ extern struct tty_driver *registered_tty_driver;
 @E(tty_driver_client_inactive_substate, tty_driver_client_active_substate, tty_client_request_connection_msg, tty_driver_grant_connection_action)
 @E(tty_driver_client_active_substate, tty_driver_client_inactive_substate, tty_client_disconnect_msg, nil)
 
-@tty_driver_load_action:exec('init_module();')
-@tty_driver_unloaded_action:exec('cleanup_module();')
-@tty_client_acquire_connection_action:exec('registered_tty_driver->ops->open(&tty, &file);')
-@tty_client_disconnect_action:exec('registered_tty_driver->ops->close(&tty, &file);')
-@tty_client_use_connection_action:exec('registered_tty_driver->ops->write(&tty, content, sizeof(content));')
+@tty_driver_load_action:exec([[
+    init_module();
+]])
+@tty_driver_unloaded_action:exec([[
+    cleanup_module();
+]])
+@tty_client_acquire_connection_action:exec([[
+    registered_tty_driver->ops->open(&tty, &file);
+]])
+@tty_client_disconnect_action:exec([[
+    registered_tty_driver->ops->close(&tty, &file);
+]])
+@tty_client_use_connection_action:exec([[
+    registered_tty_driver->ops->write(&tty, content, sizeof(content));
+]])

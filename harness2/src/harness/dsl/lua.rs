@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use crate::harness::{builder::builder::{HarnessBuilder, HarnessBuilderSymbol}, core::error::HarnessError};
 
-use super::{template::TemplateFragment};
+use super::parser::TemplateFragment;
 
 pub struct LuaTemplateInterpreter {}
 
@@ -178,59 +178,25 @@ impl LuaTemplateInterpreter {
         Ok(())
     }
 
-    fn interpret_template(&self, template: &TemplateFragment, harness: Rc<RefCell<HarnessBuilder>>, lua: &mut mlua::Lua) -> Result<(), HarnessError> {
-        let sequence = match template {
-            TemplateFragment::VerbatimSequence(elts) => elts,
-            _ => return Err(HarnessError::new("Expected top-level template fragment to be a verbatim sequence"))
-        };
+    fn interpret_template<'a>(&self, fragments: impl Iterator<Item = TemplateFragment>, harness: Rc<RefCell<HarnessBuilder>>, lua: &mut mlua::Lua) -> Result<(), HarnessError> {
+        for fragment in fragments {
+            match fragment {
+                TemplateFragment::Verbatim(content) =>
+                    harness.borrow_mut().append_global_prologue(content),
 
-        for elt in sequence {
-            match elt {
-                TemplateFragment::Literal(content) => harness.borrow_mut().append_global_prologue(content.clone()),
-                TemplateFragment::VerbatimSequence(_) => return Err(HarnessError::new("Unexpected nested verbatim sequence in the template")),
-                TemplateFragment::InterpretedSequence(seq) => self.interpret_top_level_code(seq.iter(), lua)?
+                TemplateFragment::Interpreted(code) =>
+                    lua.load(code).exec().map_err(map_lua_error)?
             }
         }
 
         Ok(())
     }
 
-    fn interpret_top_level_code<'a>(&self, sequence: impl Iterator<Item = &'a TemplateFragment>, lua: &mut mlua::Lua) -> Result<(), HarnessError> {
-        let mut code = String::new();
-        for subelt in sequence {
-            match subelt {
-                TemplateFragment::Literal(content) => code.push_str(&content),
-                TemplateFragment::InterpretedSequence(_) => return Err(HarnessError::new("Unexpected nested interpreted sequence in the template")),
-                TemplateFragment::VerbatimSequence(seq) => code.push_str(&self.interpret_verbatim_sequence(seq.iter())?),
-            }
-        }
-        lua.load(code)
-            .exec().map_err(map_lua_error)?;
-        Ok(())
-    }
-
-    fn interpret_verbatim_sequence<'a>(&self, sequence: impl Iterator<Item = &'a TemplateFragment>) -> Result<String, HarnessError> {
-        let mut verbatim = String::new();
-        for subelt in sequence {
-            match subelt {
-                TemplateFragment::Literal(content) => verbatim.push_str(&content),
-                TemplateFragment::InterpretedSequence(_) => return Err(HarnessError::new("Unexpected nested interpreted sequence in the template")),
-                TemplateFragment::VerbatimSequence(_) => return Err(HarnessError::new("Unexpected nested verbatim sequence in the template"))
-            }
-        }
-
-        let mut string_literal = String::new();
-        string_literal.push_str("[[");
-        string_literal.push_str(&verbatim);
-        string_literal.push_str("]]");
-        Ok(string_literal)
-    }
-
-    pub fn interpret(&mut self, template: &TemplateFragment) -> Result<HarnessBuilder, HarnessError> {
+    pub fn interpret(&mut self, fragments: impl Iterator<Item = TemplateFragment>) -> Result<HarnessBuilder, HarnessError> {
         let harness = Rc::new(RefCell::new(HarnessBuilder::new()));
         let mut lua = mlua::Lua::new();
         self.initialize(harness.clone(), &mut lua)?;
-        self.interpret_template(template, harness.clone(), &mut lua)?;
+        self.interpret_template(fragments, harness.clone(), &mut lua)?;
         Ok(harness.replace(HarnessBuilder::new()))
     }
 }

@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, io::Read};
 
-use harness::{codegen::{codegen::ControlFlowCodegen, goblint::ControlFlowGoblintCodegen, output::WriteCodegenOutput}, control_flow::{builder::ControlFlowBuilder, mutex::ControlFlowMutexSet}, core::{error::HarnessError, mutex::mutex::ProcessSetMutualExclusion, process::ProcessSet, state_machine::StateMachineContext}, dsl2::{lua::LuaTemplateInterpreter, template::TemplateParser}};
+use harness::{codegen::{codegen::ControlFlowCodegen, goblint::ControlFlowGoblintCodegen, output::WriteCodegenOutput}, control_flow::{builder::ControlFlowBuilder, mutex::ControlFlowMutexSet}, core::{error::HarnessError, mutex::mutex::ProcessSetMutualExclusion, process::ProcessSet, state_machine::StateMachineContext}, dsl::{lua::LuaTemplateInterpreter, parser::TemplateParser}};
 
 pub mod harness;
 
@@ -14,7 +14,7 @@ fn main() {
     let mut process_set = ProcessSet::new();
     let template = TemplateParser::parse(&mut harness_code.chars().map(| x | Ok(x))).unwrap();
     let mut lua_interp = LuaTemplateInterpreter::new();
-    let codegen_template = lua_interp.interpret(&template).unwrap().build(&mut context, &mut process_set).unwrap();
+    let codegen_template = lua_interp.interpret(template.into_iter()).unwrap().build(&mut context, &mut process_set).unwrap();
 
     let state_space = process_set.get_state_space(&context).unwrap();
     let mutual_exclusion = ProcessSetMutualExclusion::new(&context, &process_set, &state_space).unwrap();
