@@ -4,4 +4,3 @@ pub mod control_flow;
 pub mod codegen;
 pub mod builder;
 pub mod dsl;
-pub mod examples;

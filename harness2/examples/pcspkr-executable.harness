@@ -1,0 +1,16 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <pthread.h>
+
+_Atomic unsigned int activity = 0;
+
+@executable = true
+@include('pcspkr-generic.lua')
+
+@pcspkr_driver_send_event_action:exec([[
+    activity++;
+]])
+
+@i8253_client_use_action:exec([[
+    activity++;
+]])
