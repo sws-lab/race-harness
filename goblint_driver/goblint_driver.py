@@ -49,7 +49,7 @@ class GoblintDriver:
     def __call__(self, *args, **kwargs):
         return self.run(*args, **kwargs)
 
-    def run(self, build: KernelBuild, conf_filepath: Optional[str], goblint_extra_args: Optional[List[str]], inputs: Iterable[str]):
+    def run(self, build: KernelBuild, conf_filepaths: List[str], goblint_extra_args: Optional[List[str]], inputs: Iterable[str]):
         resolved_inputs = list(self._resolve_inputs(build, inputs))
         inputs = [
             str(input.absolute())
@@ -67,11 +67,11 @@ class GoblintDriver:
             goblint_conf.write(goblint_conf_content)
             goblint_conf.flush()
 
-            self._logger.info('Starting Goblint with configuration %s on %s', goblint_conf_content, inputs)
-            if conf_filepath is not None:
-                extra_conf = ['--conf', str(conf_filepath)]
-            else:
-                extra_conf = list()
+            self._logger.info('Starting Goblint with configuration %s + %s on %s', goblint_conf_content, conf_filepaths, inputs)
+            extra_conf = list()
+            for conf_filepath in conf_filepaths:
+                extra_conf.append('--conf')
+                extra_conf.append(conf_filepath)
             goblint = subprocess.Popen(
                 executable=self._goblint_filepath,
                 args=[self._goblint_filepath, '--conf', goblint_conf.name, *extra_conf, *(goblint_extra_args or ()), *inputs],
@@ -122,7 +122,7 @@ if __name__ == '__main__':
         try:
             build = resolve_build(db, args.build_id)
             goblint = GoblintDriver(db, args.goblint, logger)
-            goblint(build, (pathlib.Path(__file__).parent / 'default.json').absolute(), shlex.split(args.goblint_args), args.input)
+            goblint(build, [str((pathlib.Path(__file__).parent / 'default.json').absolute())], shlex.split(args.goblint_args), args.input)
         except GoblintDriverException as ex:
             logger.error(str(ex))
             sys.exit(-1)

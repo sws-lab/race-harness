@@ -19,7 +19,7 @@ class VerificationTask:
     kernel_inputs: List[str]
     stubs: List[str]
     harness: str
-    goblint_conf: Any
+    goblint_conf: List[Any]
     goblint_extra_args: List[str]
 
     @staticmethod
@@ -59,12 +59,22 @@ class VerificationTaskDriver:
                 stub_path = pathlib.Path(stub_filepath)
                 if not stub_path.is_absolute():
                     stub_path = task.root_dir / stub_path
-                stubs.append(str(stub_path))
+                stubs.append(str(stub_path.absolute()))
 
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.json') as goblint_conf:
-                json.dump(task.goblint_conf, goblint_conf)
-                goblint_conf.flush()
-                self._goblint_driver.run(build, goblint_conf.name, task.goblint_extra_args, [*task.kernel_inputs, *stubs, harness_file.name])
+            with tempfile.TemporaryDirectory() as goblint_conf_dir:
+                goblint_confs = list()
+                for index, conf_part in enumerate(task.goblint_conf):
+                    if isinstance(conf_part, str):
+                        conf_filepath = pathlib.Path(conf_part)
+                        if not conf_filepath.is_absolute():
+                            conf_filepath = task.root_dir / conf_filepath
+                        goblint_confs.append(str(conf_filepath.absolute()))
+                    else:
+                        conf_filename = os.path.join(goblint_conf_dir, f'conf{index}.json')
+                        with open(conf_filename, 'w') as conf_out:
+                            json.dump(conf_part, conf_out)
+                        goblint_confs.append(conf_filename)
+                self._goblint_driver.run(build, goblint_confs, task.goblint_extra_args, [*task.kernel_inputs, *stubs, harness_file.name])
 
 
 if __name__ == '__main__':
