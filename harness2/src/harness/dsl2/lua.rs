@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
-use crate::harness::{builder::builder::{HarnessBuilder, HarnessBuilderSymbolID}, core::error::HarnessError};
+use crate::harness::{builder::builder::{HarnessBuilder, HarnessBuilderSymbol}, core::error::HarnessError};
 
 use super::{template::TemplateFragment};
 
@@ -9,17 +9,17 @@ pub struct LuaTemplateInterpreter {}
 #[derive(Clone)]
 struct TemplateSymbolLuaValue {
     harness: Rc<RefCell<HarnessBuilder>>,
-    symbol: HarnessBuilderSymbolID
+    symbol: HarnessBuilderSymbol
 }
 
-fn into_symbol(value: mlua::Value) -> mlua::Result<HarnessBuilderSymbolID> {
+fn into_symbol(value: mlua::Value) -> mlua::Result<HarnessBuilderSymbol> {
     Ok(value.as_userdata()
         .ok_or(mlua::Error::FromLuaConversionError { from: value.type_name(), to: "TemplateSymbolLuaValue".into(), message: None })?
         .borrow::<TemplateSymbolLuaValue>()?
         .symbol)
 }
 
-fn into_optional_symbol(value: mlua::Value) -> mlua::Result<Option<HarnessBuilderSymbolID>> {
+fn into_optional_symbol(value: mlua::Value) -> mlua::Result<Option<HarnessBuilderSymbol>> {
     if value.is_nil() {
         Ok(None)
     } else {
@@ -39,7 +39,7 @@ fn map_harness_error(err: HarnessError) -> mlua::Error {
 }
 
 impl TemplateSymbolLuaValue {
-    pub fn new(harness: Rc<RefCell<HarnessBuilder>>, symbol: HarnessBuilderSymbolID) -> TemplateSymbolLuaValue {
+    pub fn new(harness: Rc<RefCell<HarnessBuilder>>, symbol: HarnessBuilderSymbol) -> TemplateSymbolLuaValue {
         TemplateSymbolLuaValue { harness, symbol }
     }
 }
@@ -57,7 +57,7 @@ impl mlua::UserData for TemplateSymbolLuaValue {
             let destinations = destinations.as_table()
                 .ok_or(mlua::Error::FromLuaConversionError { from: destinations.type_name(), to: "[TemplateSymbolLuaValue]".into(), message: None })?
                 .pairs::<mlua::Value, mlua::Value>()
-                .map(| pair | -> Result<HarnessBuilderSymbolID, mlua::Error> {
+                .map(| pair | -> Result<HarnessBuilderSymbol, mlua::Error> {
                     let destination = into_symbol(pair?.1)?;
                     Ok(destination)
                 })
@@ -100,7 +100,7 @@ impl mlua::UserData for TemplateSymbolLuaValue {
             let other_processes = other_processes.as_table()
                 .ok_or(mlua::Error::FromLuaConversionError { from: other_processes.type_name(), to: "[TemplateSymbolLuaValue]".into(), message: None })?
                 .pairs::<mlua::Value, mlua::Value>()
-                .map(| pair | -> Result<HarnessBuilderSymbolID, mlua::Error> {
+                .map(| pair | -> Result<HarnessBuilderSymbol, mlua::Error> {
                     let destination = into_symbol(pair?.1)?;
                     Ok(destination)
                 })
