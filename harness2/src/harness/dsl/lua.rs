@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::Arc};
 
 use crate::harness::{builder::builder::{HarnessBuilder, HarnessBuilderSymbol}, core::error::HarnessError};
 
@@ -121,7 +121,7 @@ impl LuaTemplateInterpreter {
         LuaTemplateInterpreter {}
     }
 
-    fn initialize<'a, 'b: 'a>(&self, harness: Rc<RefCell<HarnessBuilder>>, lua: &'b mut mlua::Lua) -> Result<(), HarnessError> {
+    fn initialize<'a, 'b: 'a>(&self, harness: Rc<RefCell<HarnessBuilder>>, lua: &'b mut mlua::Lua, include_base_path: Option<PathBuf>) -> Result<(), HarnessError> {
         {
             let harness = harness.clone();
             let new_state_fn = lua.create_function(move |lua, mnemonic: String| {
@@ -175,10 +175,25 @@ impl LuaTemplateInterpreter {
             }).map_err(map_lua_error)?;
             lua.globals().set("P", new_process_fn).map_err(map_lua_error)?;
         }
+        {
+            let include_fn = lua.create_function(move |lua, filepath: String | {
+                let path = std::path::Path::new(&filepath);
+                let pathbuf = if path.is_relative() && include_base_path.is_some() {
+                    let mut basepath = include_base_path.clone().unwrap();
+                    basepath.push(path);
+                    basepath
+                } else {
+                    path.to_path_buf()
+                };
+                lua.load(pathbuf).exec()
+            }).map_err(map_lua_error)?;
+            lua.globals().set("include", include_fn).map_err(map_lua_error)?;
+        }
         Ok(())
     }
 
-    fn interpret_template<'a>(&self, fragments: impl Iterator<Item = TemplateFragment>, harness: Rc<RefCell<HarnessBuilder>>, lua: &mut mlua::Lua) -> Result<(), HarnessError> {
+    fn interpret_template<'a>(&self, fragments: impl Iterator<Item = TemplateFragment>, harness: Rc<RefCell<HarnessBuilder>>, lua: &mut mlua::Lua) -> Result<bool, HarnessError> {
+        lua.globals().set("executable", false).map_err(map_lua_error)?;
         for fragment in fragments {
             match fragment {
                 TemplateFragment::Verbatim(content) =>
@@ -189,14 +204,16 @@ impl LuaTemplateInterpreter {
             }
         }
 
-        Ok(())
+        let executable: bool = lua.globals().get("executable").map_err(map_lua_error)?;
+
+        Ok(executable)
     }
 
-    pub fn interpret(&mut self, fragments: impl Iterator<Item = TemplateFragment>) -> Result<HarnessBuilder, HarnessError> {
+    pub fn interpret(&mut self, fragments: impl Iterator<Item = TemplateFragment>, include_base_path: Option<PathBuf>) -> Result<(HarnessBuilder, bool), HarnessError> {
         let harness = Rc::new(RefCell::new(HarnessBuilder::new()));
         let mut lua = mlua::Lua::new();
-        self.initialize(harness.clone(), &mut lua)?;
-        self.interpret_template(fragments, harness.clone(), &mut lua)?;
-        Ok(harness.replace(HarnessBuilder::new()))
+        self.initialize(harness.clone(), &mut lua, include_base_path)?;
+        let executable = self.interpret_template(fragments, harness.clone(), &mut lua)?;
+        Ok((harness.replace(HarnessBuilder::new()), executable))
     }
 }

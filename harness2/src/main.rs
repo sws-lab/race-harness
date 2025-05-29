@@ -1,12 +1,12 @@
-use std::{collections::BTreeMap, io::Read};
+use std::{collections::BTreeMap, io::Read, path::Path};
 
-use harness::{codegen::{codegen::ControlFlowCodegen, goblint::ControlFlowGoblintCodegen, output::WriteCodegenOutput}, control_flow::{builder::ControlFlowBuilder, mutex::ControlFlowMutexSet}, core::{error::HarnessError, mutex::mutex::ProcessSetMutualExclusion, process::ProcessSet, state_machine::StateMachineContext}, dsl::{lua::LuaTemplateInterpreter, parser::TemplateParser}};
+use harness::{codegen::{codegen::ControlFlowCodegen, executable::ControlFlowExecutableCodegen, goblint::ControlFlowGoblintCodegen, output::WriteCodegenOutput}, control_flow::{builder::ControlFlowBuilder, mutex::ControlFlowMutexSet}, core::{error::HarnessError, mutex::mutex::ProcessSetMutualExclusion, process::ProcessSet, state_machine::StateMachineContext}, dsl::{lua::LuaTemplateInterpreter, parser::TemplateParser}};
 
 pub mod harness;
 
 fn main() {
-    let harness_filepath = std::env::args().skip(1).next().expect("Expected harness filepath as a command-line argument");
-    let mut harness_file = std::fs::File::open(harness_filepath).unwrap();
+    let harness_filepath = Path::new(&std::env::args().skip(1).next().expect("Expected harness filepath as a command-line argument")).to_path_buf();
+    let mut harness_file = std::fs::File::open(&harness_filepath).unwrap();
     let mut harness_code = String::new();
     harness_file.read_to_string(&mut harness_code).unwrap();
 
@@ -14,7 +14,8 @@ fn main() {
     let mut process_set = ProcessSet::new();
     let template = TemplateParser::parse(&mut harness_code.chars().map(| x | Ok(x))).unwrap();
     let mut lua_interp = LuaTemplateInterpreter::new();
-    let codegen_template = lua_interp.interpret(template.into_iter()).unwrap().build(&mut context, &mut process_set).unwrap();
+    let (harness_builder, executable) = lua_interp.interpret(template.into_iter(), Some(harness_filepath.parent().unwrap().into())).unwrap();
+    let codegen_template = harness_builder.build(&mut context, &mut process_set).unwrap();
 
     let state_space = process_set.get_state_space(&context).unwrap();
     let mutual_exclusion = ProcessSetMutualExclusion::new(&context, &process_set, &state_space).unwrap();
@@ -28,7 +29,12 @@ fn main() {
 
     let mut stdout = std::io::stdout();
     let mut codegen_output = WriteCodegenOutput::new(&mut stdout);
-    let codegen = ControlFlowGoblintCodegen::new();
-    codegen.format(&mut codegen_output, &context, &process_set, &codegen_template, control_flow_nodes.iter().map(| (process, node) | (*process, node)), mutex_set.get_mutexes()).unwrap();
+    if executable {
+        let codegen = ControlFlowExecutableCodegen::new();
+        codegen.format(&mut codegen_output, &context, &process_set, &codegen_template, control_flow_nodes.iter().map(| (process, node) | (*process, node)), mutex_set.get_mutexes()).unwrap();
+    } else {
+        let codegen = ControlFlowGoblintCodegen::new();
+        codegen.format(&mut codegen_output, &context, &process_set, &codegen_template, control_flow_nodes.iter().map(| (process, node) | (*process, node)), mutex_set.get_mutexes()).unwrap();
+    }
 
 }
