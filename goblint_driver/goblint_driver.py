@@ -41,27 +41,20 @@ def resolve_inputs(db: CompilationDatabase, build: KernelBuild, inputs: Iterable
                 raise GoblintDriverException(f'Unable to find input file input {input}')
             
 class GoblintDriver:
-    def __init__(self, db: CompilationDatabase, goblint_filepath: str, goblint_extra_args: Optional[List[str]], logger: logging.Logger):
+    def __init__(self, db: CompilationDatabase, goblint_filepath: str, logger: logging.Logger):
         self._db = db
         self._goblint_filepath = goblint_filepath
-        self._goblint_extra_args = goblint_extra_args.copy() if goblint_extra_args else list()
         self._logger = logger
 
     def __call__(self, *args, **kwargs):
         return self.run(*args, **kwargs)
 
-    def run(self, build: KernelBuild, inputs: Iterable[str]):
+    def run(self, build: KernelBuild, conf_filepath: Optional[str], goblint_extra_args: Optional[List[str]], inputs: Iterable[str]):
         resolved_inputs = list(self._resolve_inputs(build, inputs))
         inputs = [
             str(input.absolute())
             for _, input in resolved_inputs
         ]
-        compile_cmdline = self._determine_command_line(
-            target
-            for target, _ in resolved_inputs
-            if target is not None
-        )
-        inlcude_paths = self._find_include_paths(build, compile_cmdline)
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json') as goblint_conf:
             goblint_conf_content = json.dumps({
@@ -75,10 +68,13 @@ class GoblintDriver:
             goblint_conf.flush()
 
             self._logger.info('Starting Goblint with configuration %s on %s', goblint_conf_content, inputs)
-            conf_filepath = pathlib.Path(__file__).parent / 'config.json'
+            if conf_filepath is not None:
+                extra_conf = ['--conf', str(conf_filepath)]
+            else:
+                extra_conf = list()
             goblint = subprocess.Popen(
                 executable=self._goblint_filepath,
-                args=[self._goblint_filepath, '--conf', goblint_conf.name, '--conf', str(conf_filepath.absolute()), *self._goblint_extra_args, *inputs],
+                args=[self._goblint_filepath, '--conf', goblint_conf.name, *extra_conf, *(goblint_extra_args or ()), *inputs],
                 stdin=subprocess.DEVNULL,
                 shell=False
             )
@@ -106,19 +102,6 @@ class GoblintDriver:
                 return target.tool_args
         logger.warning(f'Unable to determine kernel target compilation command line; make sure to --goblint-args arguments to correctly configure Goblint')
         return []
-    
-    def _find_include_paths(self, build: KernelBuild, cmdline: Iterable[str]) -> Iterable[pathlib.Path]:
-        yield build.path
-
-        yield_next_arg = False
-        for argument in cmdline:
-            if yield_next_arg:
-                yield build.path / argument
-                yield_next_arg = False
-            if argument == '-I':
-                yield_next_arg = True
-            elif argument.startswith('-I'):
-                yield build.path / argument[2:]
 
 if __name__ == '__main__':
     prog_basename = os.path.basename(__file__)
@@ -138,8 +121,8 @@ if __name__ == '__main__':
     with CompilationDatabase(args.db) as db:
         try:
             build = resolve_build(db, args.build_id)
-            goblint = GoblintDriver(db, args.goblint, shlex.split(args.goblint_args), logger)
-            goblint(build, args.input)
+            goblint = GoblintDriver(db, args.goblint, logger)
+            goblint(build, (pathlib.Path(__file__).parent / 'default.json').absolute(), shlex.split(args.goblint_args), args.input)
         except GoblintDriverException as ex:
             logger.error(str(ex))
             sys.exit(-1)
