@@ -9,7 +9,7 @@ struct S1 {
                             
 static struct S1 *s1_ptr;
 
-@executable = true
+@executable(true)
 @include('ttyprintk-generic.lua')
 
 @tty_driver:setup([[
