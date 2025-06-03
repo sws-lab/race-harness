@@ -3,87 +3,88 @@ use std::collections::{BTreeMap, HashMap};
 use crate::harness::{codegen::template::CodegenTemplate, core::{error::HarnessError, process::{ProcessID, ProcessSet}, state_machine::{StateMachineActionID, StateMachineContext, StateMachineMessageDestination, StateMachineMessageEnvelopeBehavior, StateMachineMessageID, StateMachineMessageParticipantID, StateMachineNodeID}}, entities::product_node::{StateMachineProductNode, StateMachineProductNodeBuilder}};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
-pub struct HarnessBuilderSymbolID(u64);
+pub struct HarnessContextSymbolID(u64);
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
-pub enum HarnessBuilderSymbol {
-    State(HarnessBuilderSymbolID),
-    Edge(HarnessBuilderSymbolID),
-    Message(HarnessBuilderSymbolID),
-    Action(HarnessBuilderSymbolID),
-    Process(HarnessBuilderSymbolID)
+pub enum HarnessContextSymbol {
+    State(HarnessContextSymbolID),
+    Edge(HarnessContextSymbolID),
+    Message(HarnessContextSymbolID),
+    Action(HarnessContextSymbolID),
+    Process(HarnessContextSymbolID)
 }
 
 #[derive(Clone)]
-enum HarnessStateBuilder {
+enum HarnessContextStateBuilder {
     Primitive {
         mnemonic: String
     },
 
     Product {
-        base_state: HarnessBuilderSymbol,
-        mapped_processes: Vec<HarnessBuilderSymbol>
+        base_state: HarnessContextSymbol,
+        mapped_processes: Vec<HarnessContextSymbol>
     }
 }
 
 #[derive(Clone)]
-struct HarnessMessageBuilder {
+struct HarnessContextMessageBuilder {
     mnemonic: String
 }
 
 #[derive(Clone)]
-struct HarnessEdgeBuilder {
-    target: HarnessBuilderSymbol,
-    trigger: Option<HarnessBuilderSymbol>,
-    action: Option<HarnessBuilderSymbol>
+struct HarnessContextEdgeBuilder {
+    target: HarnessContextSymbol,
+    trigger: Option<HarnessContextSymbol>,
+    action: Option<HarnessContextSymbol>
 }
 
 #[derive(Clone)]
-enum HarnessEnvelopeBuilder {
-    Unicast(HarnessBuilderSymbol, StateMachineMessageEnvelopeBehavior, HarnessBuilderSymbol),
-    Multicast(Vec<HarnessBuilderSymbol>, StateMachineMessageEnvelopeBehavior, HarnessBuilderSymbol),
-    Response(StateMachineMessageEnvelopeBehavior, HarnessBuilderSymbol)
+enum HarnessContextEnvelopeBuilder {
+    Unicast(HarnessContextSymbol, StateMachineMessageEnvelopeBehavior, HarnessContextSymbol),
+    Multicast(Vec<HarnessContextSymbol>, StateMachineMessageEnvelopeBehavior, HarnessContextSymbol),
+    Response(StateMachineMessageEnvelopeBehavior, HarnessContextSymbol)
 }
 
 #[derive(Clone)]
-struct HarnessActionBuilder {
+struct HarnessContextActionBuilder {
     mnemonic: String,
-    envelopes: Vec<HarnessEnvelopeBuilder>,
+    envelopes: Vec<HarnessContextEnvelopeBuilder>,
     content: Option<String>
 }
 
 #[derive(Clone)]
-struct HarnessProcessBuilder {
+struct HarnessContextProcessBuilder {
     mnemonic: String,
-    entry_state: HarnessBuilderSymbol,
+    entry_state: HarnessContextSymbol,
     parameters: HashMap<String, String>,
     prologue: Option<String>
 }
 
-struct HarnessBuilderState {
-    states: HashMap<HarnessBuilderSymbol, StateMachineNodeID>,
-    messages: HashMap<HarnessBuilderSymbol, StateMachineMessageID>,
-    actions: HashMap<HarnessBuilderSymbol, StateMachineActionID>,
-    processes: HashMap<HarnessBuilderSymbol, ProcessID>,
-    pending_product_mappings: Vec<(HarnessBuilderSymbol, StateMachineProductNode, Vec<HarnessBuilderSymbol>)>
+struct HarnessContextBuilderState {
+    states: HashMap<HarnessContextSymbol, StateMachineNodeID>,
+    messages: HashMap<HarnessContextSymbol, StateMachineMessageID>,
+    actions: HashMap<HarnessContextSymbol, StateMachineActionID>,
+    processes: HashMap<HarnessContextSymbol, ProcessID>,
+    pending_product_mappings: Vec<(HarnessContextSymbol, StateMachineProductNode, Vec<HarnessContextSymbol>)>
 }
 
 #[derive(Clone)]
-pub struct HarnessBuilder {
+pub struct HarnessContext {
     next_symbol: u64,
-    named_symbols: HashMap<String, HarnessBuilderSymbol>,
-    states: HashMap<HarnessBuilderSymbol, HarnessStateBuilder>,
-    messages: HashMap<HarnessBuilderSymbol, HarnessMessageBuilder>,
-    edges: HashMap<HarnessBuilderSymbol, HarnessEdgeBuilder>,
-    direct_edges: HashMap<HarnessBuilderSymbol, Vec<HarnessBuilderSymbol>>,
-    actions: HashMap<HarnessBuilderSymbol, HarnessActionBuilder>,
-    processes: BTreeMap<HarnessBuilderSymbol, HarnessProcessBuilder>,
-    global_prologue: Option<String>
+    named_symbols: HashMap<String, HarnessContextSymbol>,
+    states: HashMap<HarnessContextSymbol, HarnessContextStateBuilder>,
+    messages: HashMap<HarnessContextSymbol, HarnessContextMessageBuilder>,
+    edges: HashMap<HarnessContextSymbol, HarnessContextEdgeBuilder>,
+    direct_edges: HashMap<HarnessContextSymbol, Vec<HarnessContextSymbol>>,
+    actions: HashMap<HarnessContextSymbol, HarnessContextActionBuilder>,
+    processes: BTreeMap<HarnessContextSymbol, HarnessContextProcessBuilder>,
+    global_prologue: Option<String>,
+    executable: bool
 }
 
-impl HarnessBuilder {
-    pub fn new() -> HarnessBuilder {
-        HarnessBuilder {
+impl HarnessContext {
+    pub fn new() -> HarnessContext {
+        HarnessContext {
             next_symbol: 0,
             named_symbols: HashMap::new(),
             states: HashMap::new(),
@@ -92,18 +93,27 @@ impl HarnessBuilder {
             direct_edges: HashMap::new(),
             actions: HashMap::new(),
             processes: BTreeMap::new(),
-            global_prologue: None
+            global_prologue: None,
+            executable: false
         }
     }
 
-    pub fn new_primitive_state(&mut self, mnemonic: &str) -> Result<HarnessBuilderSymbol, HarnessError> {
+    pub fn set_executable(&mut self, executable: bool) {
+        self.executable = executable;
+    }
+
+    pub fn is_executable(&self) -> bool {
+        self.executable
+    }
+
+    pub fn new_primitive_state(&mut self, mnemonic: &str) -> Result<HarnessContextSymbol, HarnessError> {
         let symbol = self.new_named_state_symbol(mnemonic)?;
         self.states.entry(symbol)
-            .or_insert(HarnessStateBuilder::Primitive { mnemonic: mnemonic.into() });
+            .or_insert(HarnessContextStateBuilder::Primitive { mnemonic: mnemonic.into() });
         Ok(symbol)
     }
 
-    pub fn new_product_state(&mut self, mnemonic: &str, base_state: HarnessBuilderSymbol, mapped_processes: impl Iterator<Item = HarnessBuilderSymbol>) -> Result<HarnessBuilderSymbol, HarnessError> {
+    pub fn new_product_state(&mut self, mnemonic: &str, base_state: HarnessContextSymbol, mapped_processes: impl Iterator<Item = HarnessContextSymbol>) -> Result<HarnessContextSymbol, HarnessError> {
         let symbol = self.new_named_state_symbol(mnemonic)?;
         if !self.states.contains_key(&symbol) {
             if !self.states.contains_key(&base_state) {
@@ -114,37 +124,37 @@ impl HarnessBuilder {
                 return Err(HarnessError::new("Unknown product state mapped process symbol"));
             }
 
-            self.states.insert(symbol, HarnessStateBuilder::Product { base_state, mapped_processes });
+            self.states.insert(symbol, HarnessContextStateBuilder::Product { base_state, mapped_processes });
         }
         
         Ok(symbol)
     }
 
-    pub fn new_message(&mut self, mnemonic: &str) -> Result<HarnessBuilderSymbol, HarnessError> {
+    pub fn new_message(&mut self, mnemonic: &str) -> Result<HarnessContextSymbol, HarnessError> {
         let symbol = self.new_named_message_symbol(mnemonic)?;
         self.messages.entry(symbol)
-            .or_insert(HarnessMessageBuilder { mnemonic: mnemonic.into() });
+            .or_insert(HarnessContextMessageBuilder { mnemonic: mnemonic.into() });
         Ok(symbol)
     }
 
-    pub fn new_action(&mut self, mnemonic: &str) -> Result<HarnessBuilderSymbol, HarnessError> {
+    pub fn new_action(&mut self, mnemonic: &str) -> Result<HarnessContextSymbol, HarnessError> {
         let symbol = self.new_named_action_symbol(mnemonic)?;
         self.actions.entry(symbol)
-            .or_insert(HarnessActionBuilder { mnemonic: mnemonic.into(), envelopes: Vec::new(), content: None });
+            .or_insert(HarnessContextActionBuilder { mnemonic: mnemonic.into(), envelopes: Vec::new(), content: None });
         Ok(symbol)
     }
 
-    pub fn new_process(&mut self, mnemonic: &str, entry_state: HarnessBuilderSymbol) -> Result<HarnessBuilderSymbol, HarnessError> {
+    pub fn new_process(&mut self, mnemonic: &str, entry_state: HarnessContextSymbol) -> Result<HarnessContextSymbol, HarnessError> {
         if !self.states.contains_key(&entry_state) {
             return Err(HarnessError::new("Unknown process entry state symbol"));
         }
         let symbol = self.new_named_process_symbol(mnemonic)?;
         self.processes.entry(symbol)
-            .or_insert(HarnessProcessBuilder { mnemonic: mnemonic.into(), entry_state, parameters: HashMap::new(), prologue: None });
+            .or_insert(HarnessContextProcessBuilder { mnemonic: mnemonic.into(), entry_state, parameters: HashMap::new(), prologue: None });
         Ok(symbol)
     }
 
-    pub fn new_edge(&mut self, source: HarnessBuilderSymbol, target: HarnessBuilderSymbol, trigger: Option<HarnessBuilderSymbol>, action: Option<HarnessBuilderSymbol>) -> Result<HarnessBuilderSymbol, HarnessError> {
+    pub fn new_edge(&mut self, source: HarnessContextSymbol, target: HarnessContextSymbol, trigger: Option<HarnessContextSymbol>, action: Option<HarnessContextSymbol>) -> Result<HarnessContextSymbol, HarnessError> {
         if !self.states.contains_key(&source) {
             return Err(HarnessError::new("Unknown edge source state symbol"));
         }
@@ -162,8 +172,8 @@ impl HarnessBuilder {
             }
         }
 
-        let symbol = HarnessBuilderSymbol::Edge(self.new_symbol_id());
-        self.edges.insert(symbol, HarnessEdgeBuilder { target, trigger, action });
+        let symbol = HarnessContextSymbol::Edge(self.new_symbol_id());
+        self.edges.insert(symbol, HarnessContextEdgeBuilder { target, trigger, action });
         self.direct_edges.entry(source)
             .or_insert(Vec::new())
             .push(symbol);
@@ -180,7 +190,7 @@ impl HarnessBuilder {
         }
     }
 
-    pub fn append_process_prologue(&mut self, process: HarnessBuilderSymbol, prologue: String) -> Result<(), HarnessError> {
+    pub fn append_process_prologue(&mut self, process: HarnessContextSymbol, prologue: String) -> Result<(), HarnessError> {
         let process_builder = self.processes.get_mut(&process)
             .ok_or(HarnessError::new("Unknown process symbol"))?;
         match &mut process_builder.prologue {
@@ -193,14 +203,14 @@ impl HarnessBuilder {
         Ok(())
     }
 
-    pub fn set_process_parameter(&mut self, process: HarnessBuilderSymbol, key: String, value: String) -> Result<(), HarnessError> {
+    pub fn set_process_parameter(&mut self, process: HarnessContextSymbol, key: String, value: String) -> Result<(), HarnessError> {
         self.processes.get_mut(&process)
             .ok_or(HarnessError::new("Unknown process symbol"))?
             .parameters.insert(key, value);
         Ok(())
     }
 
-    pub fn set_action_content(&mut self, action: HarnessBuilderSymbol, content: String) -> Result<(), HarnessError> {
+    pub fn set_action_content(&mut self, action: HarnessContextSymbol, content: String) -> Result<(), HarnessError> {
         let action = match self.actions.get_mut(&action) {
             Some(action) => action,
             None => return Err(HarnessError::new("Unknown action symbol"))
@@ -209,7 +219,7 @@ impl HarnessBuilder {
         Ok(())
     }
 
-    pub fn new_unicast_envelope(&mut self, action: HarnessBuilderSymbol, destination: HarnessBuilderSymbol, behavior: StateMachineMessageEnvelopeBehavior, message: HarnessBuilderSymbol) -> Result<(), HarnessError> {
+    pub fn new_unicast_envelope(&mut self, action: HarnessContextSymbol, destination: HarnessContextSymbol, behavior: StateMachineMessageEnvelopeBehavior, message: HarnessContextSymbol) -> Result<(), HarnessError> {
         let action = match self.actions.get_mut(&action) {
             Some(action) => action,
             None => return Err(HarnessError::new("Unknown action symbol"))
@@ -221,11 +231,11 @@ impl HarnessBuilder {
             return Err(HarnessError::new("Unknown envelope message symbol"));
         }
 
-        action.envelopes.push(HarnessEnvelopeBuilder::Unicast(destination, behavior, message));
+        action.envelopes.push(HarnessContextEnvelopeBuilder::Unicast(destination, behavior, message));
         Ok(())
     }
 
-    pub fn new_multicast_envelope(&mut self, action: HarnessBuilderSymbol, destinations: impl Iterator<Item = HarnessBuilderSymbol>, behavior: StateMachineMessageEnvelopeBehavior, message: HarnessBuilderSymbol) -> Result<(), HarnessError> {
+    pub fn new_multicast_envelope(&mut self, action: HarnessContextSymbol, destinations: impl Iterator<Item = HarnessContextSymbol>, behavior: StateMachineMessageEnvelopeBehavior, message: HarnessContextSymbol) -> Result<(), HarnessError> {
         let action = match self.actions.get_mut(&action) {
             Some(action) => action,
             None => return Err(HarnessError::new("Unknown action symbol"))
@@ -238,11 +248,11 @@ impl HarnessBuilder {
             return Err(HarnessError::new("Unknown envelope message symbol"));
         }
 
-        action.envelopes.push(HarnessEnvelopeBuilder::Multicast(destinations, behavior, message));
+        action.envelopes.push(HarnessContextEnvelopeBuilder::Multicast(destinations, behavior, message));
         Ok(())
     }
 
-    pub fn new_response_envelope(&mut self, action: HarnessBuilderSymbol, behavior: StateMachineMessageEnvelopeBehavior, message: HarnessBuilderSymbol) -> Result<(), HarnessError> {
+    pub fn new_response_envelope(&mut self, action: HarnessContextSymbol, behavior: StateMachineMessageEnvelopeBehavior, message: HarnessContextSymbol) -> Result<(), HarnessError> {
         let action = match self.actions.get_mut(&action) {
             Some(action) => action,
             None => return Err(HarnessError::new("Unknown action symbol"))
@@ -251,63 +261,63 @@ impl HarnessBuilder {
             return Err(HarnessError::new("Unknown envelope message symbol"));
         }
 
-        action.envelopes.push(HarnessEnvelopeBuilder::Response(behavior, message));
+        action.envelopes.push(HarnessContextEnvelopeBuilder::Response(behavior, message));
         Ok(())
     }
 
-    fn new_symbol_id(&mut self) -> HarnessBuilderSymbolID {
-        let symbol = HarnessBuilderSymbolID(self.next_symbol);
+    fn new_symbol_id(&mut self) -> HarnessContextSymbolID {
+        let symbol = HarnessContextSymbolID(self.next_symbol);
         self.next_symbol += 1;
         symbol
     }
 
-    fn new_named_state_symbol(&mut self, name: &str) -> Result<HarnessBuilderSymbol, HarnessError> {
+    fn new_named_state_symbol(&mut self, name: &str) -> Result<HarnessContextSymbol, HarnessError> {
         let existing_symbol = self.named_symbols.get(name);
-        if let Some(HarnessBuilderSymbol::State(_)) = existing_symbol {
+        if let Some(HarnessContextSymbol::State(_)) = existing_symbol {
             Ok(*existing_symbol.unwrap())
         } else if let Some(_) = existing_symbol {
             Err(HarnessError::new("Another identically named symbol with mismatching type already exists"))
         } else {
-            let symbol = HarnessBuilderSymbol::State(self.new_symbol_id());
+            let symbol = HarnessContextSymbol::State(self.new_symbol_id());
             self.named_symbols.insert(name.into(), symbol);
             Ok(symbol)
         }
     }
 
-    fn new_named_message_symbol(&mut self, name: &str) -> Result<HarnessBuilderSymbol, HarnessError> {
+    fn new_named_message_symbol(&mut self, name: &str) -> Result<HarnessContextSymbol, HarnessError> {
         let existing_symbol = self.named_symbols.get(name);
-        if let Some(HarnessBuilderSymbol::Message(_)) = existing_symbol {
+        if let Some(HarnessContextSymbol::Message(_)) = existing_symbol {
             Ok(*existing_symbol.unwrap())
         } else if let Some(_) = existing_symbol {
             Err(HarnessError::new("Another identically named symbol with mismatching type already exists"))
         } else {
-            let symbol = HarnessBuilderSymbol::Message(self.new_symbol_id());
+            let symbol = HarnessContextSymbol::Message(self.new_symbol_id());
             self.named_symbols.insert(name.into(), symbol);
             Ok(symbol)
         }
     }
 
-    fn new_named_action_symbol(&mut self, name: &str) -> Result<HarnessBuilderSymbol, HarnessError> {
+    fn new_named_action_symbol(&mut self, name: &str) -> Result<HarnessContextSymbol, HarnessError> {
         let existing_symbol = self.named_symbols.get(name);
-        if let Some(HarnessBuilderSymbol::Action(_)) = existing_symbol {
+        if let Some(HarnessContextSymbol::Action(_)) = existing_symbol {
             Ok(*existing_symbol.unwrap())
         } else if let Some(_) = existing_symbol {
             Err(HarnessError::new("Another identically named symbol with mismatching type already exists"))
         } else {
-            let symbol = HarnessBuilderSymbol::Action(self.new_symbol_id());
+            let symbol = HarnessContextSymbol::Action(self.new_symbol_id());
             self.named_symbols.insert(name.into(), symbol);
             Ok(symbol)
         }
     }
 
-    fn new_named_process_symbol(&mut self, name: &str) -> Result<HarnessBuilderSymbol, HarnessError> {
+    fn new_named_process_symbol(&mut self, name: &str) -> Result<HarnessContextSymbol, HarnessError> {
         let existing_symbol = self.named_symbols.get(name);
-        if let Some(HarnessBuilderSymbol::Process(_)) = existing_symbol {
+        if let Some(HarnessContextSymbol::Process(_)) = existing_symbol {
             Ok(*existing_symbol.unwrap())
         } else if let Some(_) = existing_symbol {
             Err(HarnessError::new("Another identically named symbol with mismatching type already exists"))
         } else {
-            let symbol = HarnessBuilderSymbol::Process(self.new_symbol_id());
+            let symbol = HarnessContextSymbol::Process(self.new_symbol_id());
             self.named_symbols.insert(name.into(), symbol);
             Ok(symbol)
         }
@@ -315,7 +325,7 @@ impl HarnessBuilder {
 
     pub fn build(&self, context: &mut StateMachineContext, process_set: &mut ProcessSet) -> Result<CodegenTemplate, HarnessError> {
         let mut template = CodegenTemplate::new();
-        let mut builder = HarnessBuilderState {
+        let mut builder = HarnessContextBuilderState {
             states: HashMap::new(),
             messages: HashMap::new(),
             actions: HashMap::new(),
@@ -334,19 +344,19 @@ impl HarnessBuilder {
         Ok(template)
     }
 
-    fn build_state(&self, context: &mut StateMachineContext, process_set: &mut ProcessSet, template: &mut CodegenTemplate, builder: &mut HarnessBuilderState, process: HarnessBuilderSymbol, symbol: HarnessBuilderSymbol) -> Result<StateMachineNodeID, HarnessError> {
+    fn build_state(&self, context: &mut StateMachineContext, process_set: &mut ProcessSet, template: &mut CodegenTemplate, builder: &mut HarnessContextBuilderState, process: HarnessContextSymbol, symbol: HarnessContextSymbol) -> Result<StateMachineNodeID, HarnessError> {
         let node = if let Some(&node) = builder.states.get(&symbol) {
             return Ok(node);
         } else {
             let state_builder = self.states.get(&symbol).expect("Expected state to exist");
             match state_builder {
-                HarnessStateBuilder::Primitive { mnemonic } => {
+                HarnessContextStateBuilder::Primitive { mnemonic } => {
                     let node = context.new_node(mnemonic)?;
                     builder.states.insert(symbol, node);
                     node
                 }
                 
-                HarnessStateBuilder::Product { base_state, mapped_processes } => {
+                HarnessContextStateBuilder::Product { base_state, mapped_processes } => {
                     let base_node = self.build_state(context, process_set, template, builder, process, *base_state)?;
                     let product_builder = StateMachineProductNodeBuilder::new(base_node, mapped_processes.len());
                     let product_node = product_builder.build(context)?;
@@ -373,7 +383,7 @@ impl HarnessBuilder {
         Ok(node)
     }
 
-    fn build_message(&self, context: &mut StateMachineContext, builder: &mut HarnessBuilderState, symbol: HarnessBuilderSymbol) -> Result<StateMachineMessageID, HarnessError> {
+    fn build_message(&self, context: &mut StateMachineContext, builder: &mut HarnessContextBuilderState, symbol: HarnessContextSymbol) -> Result<StateMachineMessageID, HarnessError> {
         if let Some(&message) = builder.messages.get(&symbol) {
             Ok(message)
         } else {
@@ -384,7 +394,7 @@ impl HarnessBuilder {
         }
     }
 
-    fn build_action(&self, context: &mut StateMachineContext, template: &mut CodegenTemplate, builder: &mut HarnessBuilderState, symbol: HarnessBuilderSymbol) -> Result<StateMachineActionID, HarnessError> {
+    fn build_action(&self, context: &mut StateMachineContext, template: &mut CodegenTemplate, builder: &mut HarnessContextBuilderState, symbol: HarnessContextSymbol) -> Result<StateMachineActionID, HarnessError> {
         if let Some(&action) = builder.actions.get(&symbol) {
             Ok(action)
         } else {
@@ -400,7 +410,7 @@ impl HarnessBuilder {
         }
     }
 
-    fn build_processes(&self, context: &mut StateMachineContext, process_set: &mut ProcessSet, template: &mut CodegenTemplate, builder: &mut HarnessBuilderState) -> Result<(), HarnessError> {
+    fn build_processes(&self, context: &mut StateMachineContext, process_set: &mut ProcessSet, template: &mut CodegenTemplate, builder: &mut HarnessContextBuilderState) -> Result<(), HarnessError> {
         for (&symbol, process_builder) in &self.processes {
             let entry_node = self.build_state(context, process_set, template, builder, symbol, process_builder.entry_state)?;
             let process = process_set.new_process(process_builder.mnemonic.clone(), entry_node);
@@ -416,7 +426,7 @@ impl HarnessBuilder {
         Ok(())        
     }
 
-    fn build_product_mappings(&self, process_set: &mut ProcessSet, builder: &mut HarnessBuilderState) -> Result<(), HarnessError> {
+    fn build_product_mappings(&self, process_set: &mut ProcessSet, builder: &mut HarnessContextBuilderState) -> Result<(), HarnessError> {
         for (process, product_node, mapped_processes) in &builder.pending_product_mappings {
             let process = *builder.processes.get(&process).expect("Expected process to exist");
             let processes = mapped_processes.iter()
@@ -431,7 +441,7 @@ impl HarnessBuilder {
         Ok(())
     }
 
-    fn build_envelopes(&self, context: &mut StateMachineContext, builder: &mut HarnessBuilderState) -> Result<(), HarnessError> {
+    fn build_envelopes(&self, context: &mut StateMachineContext, builder: &mut HarnessContextBuilderState) -> Result<(), HarnessError> {
         let actions = builder.actions.iter()
             .map(| (symbol, action) | (*action, self.actions.get(&symbol).expect("Expected action to exist")))
             .collect::<Vec<_>>();
@@ -439,13 +449,13 @@ impl HarnessBuilder {
         for (action, action_builder) in actions {
             for envelope in &action_builder.envelopes {
                 match envelope {
-                    HarnessEnvelopeBuilder::Unicast(process_symbol, behavior, message_symbol) => {
+                    HarnessContextEnvelopeBuilder::Unicast(process_symbol, behavior, message_symbol) => {
                         let process = *builder.processes.get(process_symbol).expect("Expected process to exist");
                         let message = self.build_message(context, builder, *message_symbol)?;
                         context.add_envelope(action, StateMachineMessageDestination::Unicast(process.into()), *behavior, message)?;
                     }
     
-                    HarnessEnvelopeBuilder::Multicast(process_symbols, behavior, message_symbol) => {
+                    HarnessContextEnvelopeBuilder::Multicast(process_symbols, behavior, message_symbol) => {
                         let processess = process_symbols.iter()
                             .map(| process_symbol | (*builder.processes.get(process_symbol).expect("Expected process to exist")).into())
                             .collect();
@@ -453,7 +463,7 @@ impl HarnessBuilder {
                         context.add_envelope(action, StateMachineMessageDestination::Multicast(processess), *behavior, message)?;
                     }
     
-                    HarnessEnvelopeBuilder::Response(behavior, message_symbol) => {
+                    HarnessContextEnvelopeBuilder::Response(behavior, message_symbol) => {
                         let message = self.build_message(context, builder, *message_symbol)?;
                         context.add_envelope(action, StateMachineMessageDestination::Response, *behavior, message)?;
                     }
