@@ -1,6 +1,6 @@
 use std::{collections::{BTreeMap, BTreeSet, HashSet}, hash::Hash};
 
-use super::{error::HarnessError, process::{ProcessID, ProcessSet}, state_machine::{StateMachineContext, StateMachineEdgeID, StateMachineMessageEnvelope, StateMachineMessageEnvelopeBehavior, StateMachineMessageID, StateMachineNodeID}};
+use super::{error::HarnessError, process::{ProcessID, ProcessSet}, reachability::ProcessStateReachability, state_machine::{StateMachineContext, StateMachineEdgeID, StateMachineMessageEnvelope, StateMachineMessageEnvelopeBehavior, StateMachineMessageID, StateMachineNodeID}};
 
 #[derive(Clone, Debug, Eq)]
 struct ProcessState {
@@ -258,5 +258,23 @@ impl ProcessSetStateSpace {
 
     pub fn len(&self) -> usize {
         self.states.len()
+    }
+
+    pub fn derive_reachability(&self) -> ProcessStateReachability {
+        let mut reachability = ProcessStateReachability::new();
+
+        for psstate in self.iter() {
+            for (&process, process_state) in &psstate.processes {
+                reachability.mark_active(process, process_state.node);
+
+                for (&other_process, other_process_state) in &psstate.processes {
+                    if other_process != process {
+                        reachability.mark_cooccuring(process, process_state.node, other_process, other_process_state.node);
+                    }
+                }
+            }
+        }
+
+        reachability
     }
 }

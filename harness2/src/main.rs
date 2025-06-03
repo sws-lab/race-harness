@@ -18,7 +18,7 @@ fn main() {
     let harness_build = harness_context.build(&mut context, &mut process_set).unwrap();
 
     let state_space = process_set.get_state_space(&context).unwrap();
-    let mutual_exclusion = ProcessSetMutualExclusion::new(&context, &process_set, &state_space).unwrap();
+    let mutual_exclusion = ProcessSetMutualExclusion::new(&context, &process_set, &state_space.derive_reachability()).unwrap();
     let mutex_set = ControlFlowMutexSet::new(mutual_exclusion.iter());
     let control_flow_nodes = process_set.get_processes()
         .map(| process | {

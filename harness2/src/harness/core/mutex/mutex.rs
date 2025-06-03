@@ -1,25 +1,21 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
-use crate::harness::core::{error::HarnessError, process::{ProcessID, ProcessSet}, process_state::{ProcessSetState, ProcessSetStateSpace}, state_machine::{StateMachineContext, StateMachineNodeID}};
+use crate::harness::core::{error::HarnessError, process::{ProcessID, ProcessSet}, reachability::ProcessStateReachability, state_machine::{StateMachineContext, StateMachineNodeID}};
 
 use super::segment::MutualExclusionSegment;
 
-pub struct ProcessSetMutualExclusion<'a> {
-    process_active_states: HashMap<ProcessID, HashSet<StateMachineNodeID>>,
-    process_set_state_index: HashMap<(ProcessID, StateMachineNodeID), HashSet<&'a ProcessSetState>>,
+pub struct ProcessSetMutualExclusion {
     mutually_exclusive_states: HashMap<(ProcessID, StateMachineNodeID), HashMap<ProcessID, HashSet<StateMachineNodeID>>>,
     mutual_exclusion_segments: HashSet<MutualExclusionSegment>
 }
 
-impl<'a> ProcessSetMutualExclusion<'a> {
-    pub fn new(context: &'a StateMachineContext, process_set: &'a ProcessSet, state_space: &'a ProcessSetStateSpace) -> Result<ProcessSetMutualExclusion<'a>, HarnessError> {
+impl ProcessSetMutualExclusion {
+    pub fn new(context: &StateMachineContext, process_set: &ProcessSet, reachability: &ProcessStateReachability) -> Result<ProcessSetMutualExclusion, HarnessError> {
         let mut mutual_exclusion = ProcessSetMutualExclusion {
-            process_active_states: HashMap::new(),
-            process_set_state_index: HashMap::new(),
             mutually_exclusive_states: HashMap::new(),
             mutual_exclusion_segments: HashSet::new()
         };
-        mutual_exclusion.build(context, process_set, state_space)?;
+        mutual_exclusion.build(context, process_set, reachability)?;
         Ok(mutual_exclusion)
     }
 
@@ -27,48 +23,37 @@ impl<'a> ProcessSetMutualExclusion<'a> {
         self.mutual_exclusion_segments.iter()
     }
 
-    fn build(&mut self, context: &'a StateMachineContext, process_set: &'a ProcessSet, state_space: &'a ProcessSetStateSpace) -> Result<(), HarnessError> {
-        self.scan_process_set_states(process_set, state_space)?;
-        self.scan_mutually_exclusive_states(process_set)?;
+    fn build(&mut self, context: &StateMachineContext, process_set: &ProcessSet, reachability: &ProcessStateReachability) -> Result<(), HarnessError> {
+        self.scan_mutually_exclusive_states(process_set, reachability)?;
         self.generate_mutual_exclusion_segments(context, process_set)?;
         Ok(())
     }
 
-    fn scan_process_set_states(&mut self, process_set: &'a ProcessSet, state_space: &'a ProcessSetStateSpace) -> Result<(), HarnessError> {
-        for psstate in state_space.iter() {
-            for process in process_set.iter() {
-                let process_state = psstate.get_process_node(process).ok_or(HarnessError::new("Unable to find process state for mutual exclusion detection"))?;
-                self.process_active_states.entry(process)
-                    .or_insert(HashSet::new())
-                    .insert(process_state);
-                self.process_set_state_index.entry((process, process_state))
-                    .or_insert(HashSet::new())
-                    .insert(psstate);
+    fn scan_mutually_exclusive_states(&mut self, process_set: &ProcessSet, reachability: &ProcessStateReachability) -> Result<(), HarnessError> {
+        for process in process_set.iter() {
+            let process_active_states = reachability.get_active_states(process).ok_or(HarnessError::new("Unable to find process reachability information"))?;
+            for other_process in process_set.iter() {
+                if process == other_process {
+                    continue;
+                }
+
+                let other_process_active_states = reachability.get_active_states(other_process).ok_or(HarnessError::new("Unable to find process reachability information"))?;
+                let cooccuring_states = reachability.get_cooccuring_states(process, other_process).ok_or(HarnessError::new("Unable to find process reachability information"))?;
+
+                for &state in process_active_states {
+                    let mutually_exclusive_states = other_process_active_states
+                        .iter().filter(| &&other_state | !cooccuring_states.contains(&(state, other_state)))
+                        .map(| x | *x);
+                    self.mutually_exclusive_states.entry((process, state))
+                        .or_default()
+                        .insert(other_process, mutually_exclusive_states.collect());
+                }
             }
         }
         Ok(())
     }
 
-    fn scan_mutually_exclusive_states(&mut self, process_set: &'a ProcessSet) -> Result<(), HarnessError> {
-        for ((process, process_state), psstates) in &self.process_set_state_index {
-            let other_processes = process_set.iter().filter(| other | other != process);
-            for other_process in other_processes {
-                let other_process_active_states = psstates.iter()
-                    .map(| psstate | psstate.get_process_node(other_process).ok_or(HarnessError::new("Unable to find process state for mutual exclusion detection")))
-                    .collect::<Result<HashSet<StateMachineNodeID>, HarnessError>>()?;
-                let mutually_exclusive_states = self.process_active_states.get(&other_process)
-                    .expect("Expected process active states to exist")
-                    .difference(&other_process_active_states)
-                    .map(| x | *x);
-                self.mutually_exclusive_states.entry((*process, *process_state))
-                    .or_insert(HashMap::new())
-                    .insert(other_process, mutually_exclusive_states.collect());
-            }
-        }
-        Ok(())
-    }
-
-    fn generate_mutual_exclusion_segments(&mut self, context: &'a StateMachineContext, process_set: &'a ProcessSet) -> Result<(), HarnessError> {
+    fn generate_mutual_exclusion_segments(&mut self, context: &StateMachineContext, process_set: &ProcessSet) -> Result<(), HarnessError> {
         let mut segments = HashSet::new();
         for process in process_set.iter() {
             segments.extend(self.generate_process_mutual_exclusion_segments(context, process_set, process)?);
@@ -77,7 +62,7 @@ impl<'a> ProcessSetMutualExclusion<'a> {
         Ok(())
     }
 
-    fn prune_mutual_exclusion_segments(&self, process_set: &'a ProcessSet, segments: HashSet<MutualExclusionSegment>) -> Result<HashSet<MutualExclusionSegment>, HarnessError> {
+    fn prune_mutual_exclusion_segments(&self, process_set: &ProcessSet, segments: HashSet<MutualExclusionSegment>) -> Result<HashSet<MutualExclusionSegment>, HarnessError> {
         let mut segments = segments;
         let mut fixpoint_reached = false;
         while !fixpoint_reached {
@@ -116,7 +101,7 @@ impl<'a> ProcessSetMutualExclusion<'a> {
         Ok(None)
     }
 
-    fn prune_overlapping_mutual_exclusion_segments(&self, process_set: &'a ProcessSet, segments: &HashSet<MutualExclusionSegment>) -> Result<Option<HashSet<MutualExclusionSegment>>, HarnessError> {
+    fn prune_overlapping_mutual_exclusion_segments(&self, process_set: &ProcessSet, segments: &HashSet<MutualExclusionSegment>) -> Result<Option<HashSet<MutualExclusionSegment>>, HarnessError> {
         let segment_has_process = | segment: &MutualExclusionSegment, process: ProcessID | segment.get_processes().any(| p | p == process);
 
         for process in process_set.get_processes() {
@@ -155,14 +140,14 @@ impl<'a> ProcessSetMutualExclusion<'a> {
         Ok(None)
     }
 
-    fn generate_process_mutual_exclusion_segments(&self, context: &'a StateMachineContext, process_set: &'a ProcessSet, process: ProcessID) -> Result<HashSet<MutualExclusionSegment>, HarnessError> {
+    fn generate_process_mutual_exclusion_segments(&self, context: &StateMachineContext, process_set: &ProcessSet, process: ProcessID) -> Result<HashSet<MutualExclusionSegment>, HarnessError> {
         let mut segments = self.process_initial_mutual_exclusion_segments(process_set, process)?;
         segments = self.process_propagate_mutual_exclusion_segments(context, process_set, process, segments)?;
         segments = self.process_split_mutual_exclusion_segments(process, segments)?;
         self.process_merge_state_exclusion_segments(process, segments)
     }
 
-    fn process_initial_mutual_exclusion_segments(&self, process_set: &'a ProcessSet, process: ProcessID) -> Result<HashMap<StateMachineNodeID, HashSet<MutualExclusionSegment>>, HarnessError> {
+    fn process_initial_mutual_exclusion_segments(&self, process_set: &ProcessSet, process: ProcessID) -> Result<HashMap<StateMachineNodeID, HashSet<MutualExclusionSegment>>, HarnessError> {
         let process_entry_node = process_set.get_process_entry_node(process).ok_or(HarnessError::new("Unable to find process entry node"))?;
         let initial_entry_node_segment = MutualExclusionSegment::empty().union(
             self.mutually_exclusive_states.get(&(process, process_entry_node))
@@ -179,7 +164,7 @@ impl<'a> ProcessSetMutualExclusion<'a> {
         Ok(initial_segments)
     }
 
-    fn process_propagate_mutual_exclusion_segments(&self, context: &'a StateMachineContext, process_set: &'a ProcessSet, process: ProcessID, initial_segments: HashMap<StateMachineNodeID, HashSet<MutualExclusionSegment>>) -> Result<HashMap<StateMachineNodeID, HashSet<MutualExclusionSegment>>, HarnessError> {
+    fn process_propagate_mutual_exclusion_segments(&self, context: &StateMachineContext, process_set: &ProcessSet, process: ProcessID, initial_segments: HashMap<StateMachineNodeID, HashSet<MutualExclusionSegment>>) -> Result<HashMap<StateMachineNodeID, HashSet<MutualExclusionSegment>>, HarnessError> {
         let mut segments = initial_segments;
         let mut fixpoint_reached = false;
         while !fixpoint_reached {
@@ -188,7 +173,7 @@ impl<'a> ProcessSetMutualExclusion<'a> {
         Ok(segments)
     }
 
-    fn process_propagate_mutual_exclusion_segments_step(&self, context: &'a StateMachineContext, process_set: &'a ProcessSet, process: ProcessID, segments: &mut HashMap<StateMachineNodeID, HashSet<MutualExclusionSegment>>) -> Result<bool, HarnessError> {
+    fn process_propagate_mutual_exclusion_segments_step(&self, context: &StateMachineContext, process_set: &ProcessSet, process: ProcessID, segments: &mut HashMap<StateMachineNodeID, HashSet<MutualExclusionSegment>>) -> Result<bool, HarnessError> {
         let process_entry_node = process_set.get_process_entry_node(process).ok_or(HarnessError::new("Unable to determine process entry node"))?;
         let reachable_nodes = context.get_nodes_reachable_from(process_entry_node)?;
         for state in reachable_nodes.into_iter() {
@@ -201,7 +186,7 @@ impl<'a> ProcessSetMutualExclusion<'a> {
         Ok(true)
     }
 
-    fn process_generate_mutual_exclusion_segments(&self, context: &'a StateMachineContext, process_set: &'a ProcessSet, process: ProcessID, state: StateMachineNodeID, segments: &HashMap<StateMachineNodeID, HashSet<MutualExclusionSegment>>) -> Result<HashSet<MutualExclusionSegment>, HarnessError> {
+    fn process_generate_mutual_exclusion_segments(&self, context: &StateMachineContext, process_set: &ProcessSet, process: ProcessID, state: StateMachineNodeID, segments: &HashMap<StateMachineNodeID, HashSet<MutualExclusionSegment>>) -> Result<HashSet<MutualExclusionSegment>, HarnessError> {
         let surrounding_segments = self.process_state_collect_surrounding_segments(context, process_set, process, state, segments)?;
         let mutually_exclusive_states = self.process_state_collect_mutually_exclusive_states(process, state)?;
 
@@ -225,7 +210,7 @@ impl<'a> ProcessSetMutualExclusion<'a> {
         Ok(state_segments)
     }
 
-    fn process_state_collect_surrounding_segments(&self, context: &'a StateMachineContext, process_set: &'a ProcessSet, process: ProcessID, state: StateMachineNodeID, segments: &HashMap<StateMachineNodeID, HashSet<MutualExclusionSegment>>) -> Result<HashSet<MutualExclusionSegment>, HarnessError> {
+    fn process_state_collect_surrounding_segments(&self, context: &StateMachineContext, process_set: &ProcessSet, process: ProcessID, state: StateMachineNodeID, segments: &HashMap<StateMachineNodeID, HashSet<MutualExclusionSegment>>) -> Result<HashSet<MutualExclusionSegment>, HarnessError> {
         let mut surrounding_segments = HashSet::new();
         let edges = context.get_edges_from(state)
             .ok_or(HarnessError::new("Unable to retrieve edges coming from process state"))?;
