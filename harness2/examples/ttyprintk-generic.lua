@@ -1,5 +1,5 @@
 function new_ttyprintk_model(num_of_clients)
-    old_ctx = swap_task_context(new_context())
+    old_ctx = swap_task_context(__task_context:clone())
 
     M('tty_driver_loaded_msg')
     M('tty_client_request_connection_msg')
