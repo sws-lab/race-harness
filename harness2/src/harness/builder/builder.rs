@@ -14,6 +14,7 @@ pub enum HarnessBuilderSymbol {
     Process(HarnessBuilderSymbolID)
 }
 
+#[derive(Clone)]
 enum HarnessStateBuilder {
     Primitive {
         mnemonic: String
@@ -25,28 +26,33 @@ enum HarnessStateBuilder {
     }
 }
 
+#[derive(Clone)]
 struct HarnessMessageBuilder {
     mnemonic: String
 }
 
+#[derive(Clone)]
 struct HarnessEdgeBuilder {
     target: HarnessBuilderSymbol,
     trigger: Option<HarnessBuilderSymbol>,
     action: Option<HarnessBuilderSymbol>
 }
 
+#[derive(Clone)]
 enum HarnessEnvelopeBuilder {
     Unicast(HarnessBuilderSymbol, StateMachineMessageEnvelopeBehavior, HarnessBuilderSymbol),
     Multicast(Vec<HarnessBuilderSymbol>, StateMachineMessageEnvelopeBehavior, HarnessBuilderSymbol),
     Response(StateMachineMessageEnvelopeBehavior, HarnessBuilderSymbol)
 }
 
+#[derive(Clone)]
 struct HarnessActionBuilder {
     mnemonic: String,
     envelopes: Vec<HarnessEnvelopeBuilder>,
     content: Option<String>
 }
 
+#[derive(Clone)]
 struct HarnessProcessBuilder {
     mnemonic: String,
     entry_state: HarnessBuilderSymbol,
@@ -62,6 +68,7 @@ struct HarnessBuilderState {
     pending_product_mappings: Vec<(HarnessBuilderSymbol, StateMachineProductNode, Vec<HarnessBuilderSymbol>)>
 }
 
+#[derive(Clone)]
 pub struct HarnessBuilder {
     next_symbol: u64,
     named_symbols: HashMap<String, HarnessBuilderSymbol>,

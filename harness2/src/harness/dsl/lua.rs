@@ -14,6 +14,7 @@ struct TemplateSymbolLuaValue {
     symbol: HarnessBuilderSymbol
 }
 
+#[derive(Clone)]
 struct HarnessContext {
     builder: HarnessBuilder,
     executable: bool,
@@ -226,6 +227,13 @@ impl mlua::UserData for HarnessContextValue {
         methods.add_method("executable", | _, this, executable: bool | {
             this.context.borrow_mut().executable = executable;
             Ok(())
+        });
+
+        methods.add_method("clone", | _, this, () | {
+            let new_context = this.context.borrow().clone();
+            Ok(HarnessContextValue {
+                context: Rc::new(RefCell::new(new_context))
+            })
         });
 
         methods.add_meta_method("__index", | lua, this, key: String | {

@@ -22,6 +22,12 @@ function executable(flag)
     return __task_context:executable(flag)
 end
 
+function swap_task_context(ctx)
+    local old_ctx = __task_context
+    __task_context = ctx
+    return old_ctx
+end
+
 setmetatable(_G, {
     __index = function (t, k)
         return __task_context[k]
