@@ -1,5 +1,5 @@
 function new_ttyprintk_model(num_of_clients)
-    old_ctx = swap_task_context(__task_context:clone())
+    old_model = swap_task_model(new_task_model())
 
     M('tty_driver_loaded_msg')
     M('tty_client_request_connection_msg')
@@ -70,12 +70,12 @@ function new_ttyprintk_model(num_of_clients)
     E(tty_driver_client_active_substate, tty_driver_client_inactive_substate, tty_client_disconnect_msg, nil)
 
     return {
-        context = swap_task_context(old_ctx),
+        context = swap_task_model(old_model),
         tty_clients = tty_clients
     }
 end
 
 model1 = new_ttyprintk_model(4)
 -- model2 = new_ttyprintk_model(1)
-swap_task_context(model1.context)
+swap_task_model(model1.context)
 tty_clients = model1.tty_clients
