@@ -14,9 +14,9 @@ fn main() {
     let mut process_set = ProcessSet::new();
     let template = TemplateParser::parse(&mut harness_code.chars().map(| x | Ok(x))).unwrap();
     let mut lua_interp = LuaTemplateInterpreter::new();
-    let (harness_model, harness_template) = lua_interp.interpret(template.into_iter(), Some(harness_filepath.parent().unwrap().into())).unwrap();
-    let harness_model_build = harness_model.build(&mut context, &mut process_set).unwrap();
-    let codegen_template = harness_template.build(&harness_model_build).unwrap();
+    let interp_result = lua_interp.interpret(template.into_iter(), Some(harness_filepath.parent().unwrap().into())).unwrap();
+    let harness_model_build = interp_result.model.build(&mut context, &mut process_set).unwrap();
+    let codegen_template = interp_result.template.build(&harness_model_build).unwrap();
 
     let state_space = process_set.get_state_space(&context).unwrap();
     let mutual_exclusion = ProcessSetMutualExclusion::new(&context, &process_set, &state_space.derive_reachability()).unwrap();
@@ -30,7 +30,7 @@ fn main() {
 
     let mut stdout = std::io::stdout();
     let mut codegen_output = WriteCodegenOutput::new(&mut stdout);
-    if harness_template.is_executable() {
+    if interp_result.template.is_executable() {
         let codegen = ControlFlowExecutableCodegen::new();
         codegen.format(&mut codegen_output, &context, &process_set, &codegen_template, control_flow_nodes.iter().map(| (process, node) | (*process, node)), mutex_set.get_mutexes()).unwrap();
     } else {

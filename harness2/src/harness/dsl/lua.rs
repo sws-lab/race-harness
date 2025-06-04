@@ -2,11 +2,16 @@ use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc, sync::Arc}
 
 use mlua::{AnyUserData, IntoLua};
 
-use crate::harness::{core::{error::HarnessError, state_machine::StateMachineMessageEnvelopeBehavior}, frontend::{model::{HarnessModelSymbol, HarnessModel}, template::HarnessTemplate}};
+use crate::harness::{core::{error::HarnessError, state_machine::StateMachineMessageEnvelopeBehavior}, frontend::{model::{HarnessModel, HarnessModelSymbol}, template::HarnessTemplate}};
 
 use super::parser::TemplateFragment;
 
 pub struct LuaTemplateInterpreter {}
+
+pub struct TemplateInterpreterResults {
+    pub model: HarnessModel,
+    pub template: HarnessTemplate
+}
 
 #[derive(Clone)]
 struct TemplateSymbolLuaValue {
@@ -177,6 +182,23 @@ impl mlua::UserData for TemplateSymbolLuaValue {
             this.harness.context.borrow_mut().symbols.insert(mnemonic, symbol);
             Ok(symbol_value)
         });
+
+        methods.add_method("subnode", | _, this, structure: mlua::Table | {
+            let structure = structure
+                .pairs::<mlua::Value, mlua::Value>()
+                .map(| pair | -> Result<HarnessModelSymbol, mlua::Error> {
+                    let symbol = into_symbol(pair?.1)?;
+                    Ok(symbol)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let symbol = this.harness.context.borrow_mut()
+                .context
+                .new_product_element_state(this.symbol, structure)
+                .map_err(map_harness_error)?;
+            let symbol_value = TemplateSymbolLuaValue::new(this.harness.clone(), symbol);
+            Ok(symbol_value)
+        });
     }
 }
 
@@ -299,7 +321,7 @@ impl LuaTemplateInterpreter {
         Ok(())
     }
 
-    pub fn interpret(&mut self, fragments: impl Iterator<Item = TemplateFragment>, include_base_path: Option<PathBuf>) -> Result<(HarnessModel, HarnessTemplate), HarnessError> {
+    pub fn interpret(&mut self, fragments: impl Iterator<Item = TemplateFragment>, include_base_path: Option<PathBuf>) -> Result<TemplateInterpreterResults, HarnessError> {
         let harness = HarnessContextValue {
             context: Rc::new(RefCell::new(HarnessModelHandle::new(HarnessModel::new()))),
             template: Rc::new(RefCell::new(HarnessTemplate::new()))
@@ -307,11 +329,14 @@ impl LuaTemplateInterpreter {
         let mut lua = mlua::Lua::new();
         self.initialize(harness.clone(), &mut lua, include_base_path)?;
         self.interpret_template(fragments, harness, &mut lua)?;
-        let context: AnyUserData = lua.globals().get("__task_model").map_err(map_lua_error)?;
-        let context = context.borrow_mut::<HarnessContextValue>().map_err(map_lua_error)?;
-        Ok((
-            context.context.replace(HarnessModelHandle::new(HarnessModel::new())).context,
-            context.template.replace(HarnessTemplate::new())
-        ))
+        let model: AnyUserData = lua.globals().get("__task_model").map_err(map_lua_error)?;
+        let model = model.borrow_mut::<HarnessContextValue>().map_err(map_lua_error)?;
+        let template = model.template.replace(HarnessTemplate::new());
+        let model = model.context.replace(HarnessModelHandle::new(HarnessModel::new())).context;
+
+        Ok(TemplateInterpreterResults {
+            model,
+            template
+        })
     }
 }

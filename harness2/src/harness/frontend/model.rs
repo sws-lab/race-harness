@@ -1,4 +1,4 @@
-use std::{collections::{BTreeMap, HashMap}, hash::Hash};
+use std::{collections::{BTreeMap, HashMap, HashSet}, hash::Hash};
 
 use crate::harness::{core::{error::HarnessError, process::{ProcessID, ProcessSet}, state_machine::{StateMachineActionID, StateMachineContext, StateMachineMessageDestination, StateMachineMessageEnvelopeBehavior, StateMachineMessageID, StateMachineMessageParticipantID, StateMachineNodeID}}, entities::product_node::{StateMachineProductNode, StateMachineProductNodeBuilder}};
 
@@ -23,6 +23,11 @@ enum HarnessModelStateBuilder {
     Product {
         base_state: HarnessModelSymbol,
         mapped_processes: Vec<HarnessModelSymbol>
+    },
+
+    ProductElement {
+        product_state: HarnessModelSymbol,
+        element_structure: Vec<HarnessModelSymbol>
     }
 }
 
@@ -62,7 +67,8 @@ pub struct HarnessModelBuild {
     messages: HashMap<HarnessModelSymbol, StateMachineMessageID>,
     actions: HashMap<HarnessModelSymbol, StateMachineActionID>,
     processes: HashMap<HarnessModelSymbol, ProcessID>,
-    pending_product_mappings: Vec<(HarnessModelSymbol, StateMachineProductNode, Vec<HarnessModelSymbol>)>
+    product_nodes: HashMap<HarnessModelSymbol, StateMachineProductNode>,
+    pending_product_mappings: Vec<(HarnessModelSymbol, HarnessModelSymbol, Vec<HarnessModelSymbol>)>
 }
 
 #[derive(Clone)]
@@ -75,6 +81,7 @@ pub struct HarnessModel {
     direct_edges: HashMap<HarnessModelSymbol, Vec<HarnessModelSymbol>>,
     actions: HashMap<HarnessModelSymbol, HarnessActionBuilder>,
     processes: BTreeMap<HarnessModelSymbol, HarnessProcessBuilder>,
+    product_subnodes: HashMap<HarnessModelSymbol, HashSet<HarnessModelSymbol>>
 }
 
 impl HarnessModelBuild {
@@ -105,7 +112,8 @@ impl HarnessModel {
             edges: HashMap::new(),
             direct_edges: HashMap::new(),
             actions: HashMap::new(),
-            processes: BTreeMap::new()
+            processes: BTreeMap::new(),
+            product_subnodes: HashMap::new()
         }
     }
 
@@ -130,6 +138,24 @@ impl HarnessModel {
             self.states.insert(symbol, HarnessModelStateBuilder::Product { base_state, mapped_processes });
         }
         
+        Ok(symbol)
+    }
+
+    pub fn new_product_element_state<T: Into<Vec<HarnessModelSymbol>>>(&mut self, product_state: HarnessModelSymbol, element_structure: T) -> Result<HarnessModelSymbol, HarnessError> {
+        if !self.states.contains_key(&product_state) {
+            return Err(HarnessError::new("Unknown product state symbol"));
+        }
+
+        let structure: Vec<_> = element_structure.into();
+        if structure.iter().any(| symbol | !self.states.contains_key(symbol)) {
+            return Err(HarnessError::new("Unknown product substate structure symbol"));
+        }
+
+        let symbol = HarnessModelSymbol::State(self.new_symbol_id());
+        self.states.insert(symbol, HarnessModelStateBuilder::ProductElement { product_state, element_structure: structure });
+        self.product_subnodes.entry(product_state)
+            .or_default()
+            .insert(symbol);
         Ok(symbol)
     }
 
@@ -293,6 +319,7 @@ impl HarnessModel {
             messages: HashMap::new(),
             actions: HashMap::new(),
             processes: HashMap::new(),
+            product_nodes: HashMap::new(),
             pending_product_mappings: Vec::new()
         };
 
@@ -320,7 +347,25 @@ impl HarnessModel {
                     let product_builder = StateMachineProductNodeBuilder::new(base_node, mapped_processes.len());
                     let product_node = product_builder.build(context)?;
                     let node = product_node.get_root_node();
-                    build.pending_product_mappings.push((process, product_node, mapped_processes.clone()));
+                    build.product_nodes.insert(symbol, product_node);
+                    build.pending_product_mappings.push((process, symbol, mapped_processes.clone()));
+                    build.states.insert(symbol, node);
+
+                    if let Some(subnodes) = self.product_subnodes.get(&symbol) {
+                        for &subnode_symbol in subnodes {
+                            self.build_state(context, process_set, build, process, subnode_symbol)?;
+                        }
+                    }
+                    node
+                }
+
+                HarnessModelStateBuilder::ProductElement { product_state, element_structure } => {
+                    let product_node = build.product_nodes.get(product_state).ok_or(HarnessError::new("Unable to find product node"))?;
+                    let structure = element_structure.iter()
+                        .map(| symbol | build.states.get(symbol).map(| x | *x).ok_or(HarnessError::new("Unable to find state machine node")))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    let node = product_node.get_product_subnode_for(structure)
+                        .ok_or(HarnessError::new("Unable to find product node subnode"))?;
                     build.states.insert(symbol, node);
                     node
                 }
@@ -382,6 +427,7 @@ impl HarnessModel {
                 .map(| process | *build.processes.get(process).expect("Expected process to exist"))
                 .map(| process | Into::<StateMachineMessageParticipantID>::into(process))
                 .collect::<Vec<StateMachineMessageParticipantID>>();
+            let product_node = build.product_nodes.get(product_node).ok_or(HarnessError::new("Unable to find product node"))?;
             let inbound_mapping = product_node.get_inbound_message_mapping(processes.clone().into_iter())?;
             let outbound_mapping = product_node.get_outbound_message_mapping(processes.into_iter())?;
             process_set.new_inbound_message_mapping(process, inbound_mapping)?;
