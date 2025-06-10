@@ -113,6 +113,14 @@ impl ProcessState {
         new_state.node = context.get_edge_target(edge).expect("Expected edge to exist");
         Ok((new_state, edge, outbound_envelopes))
     }
+
+    fn with_empty_inbox(&self) -> Self {
+        Self {
+            process_id: self.process_id,
+            node: self.node,
+            inbox: BTreeMap::default()
+        }
+    }
 }
 
 impl Hash for ProcessSetState {
@@ -178,6 +186,12 @@ impl ProcessSetState {
         }
 
         Ok(transitions)
+    }
+
+    pub fn with_empty_inboxes(&self) -> Self {
+        Self {
+            processes: self.processes.iter().map(| (process, state) | (*process, state.with_empty_inbox())).collect()
+        }
     }
 
     fn next_transitions_for(&self, context: &StateMachineContext, process_set: &ProcessSet, process_state: &ProcessState) -> Result<Vec<(ProcessSetState, ProcessID, StateMachineEdgeID)>, HarnessError> {

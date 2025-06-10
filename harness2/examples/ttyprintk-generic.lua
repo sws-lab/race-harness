@@ -75,7 +75,7 @@ function new_ttyprintk_model(num_of_clients)
     }
 end
 
-model1 = new_ttyprintk_model(4)
+model1 = new_ttyprintk_model(1)
 -- model2 = new_ttyprintk_model(1)
 swap_task_model(model1.context)
 tty_clients = model1.tty_clients

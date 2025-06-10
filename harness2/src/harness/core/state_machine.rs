@@ -66,6 +66,12 @@ pub struct StateMachineContext {
     reachable_nodes: RefCell<HashMap<StateMachineNodeID, HashSet<StateMachineNodeID>>>
 }
 
+impl From<StateMachineNodeID> for u64 {
+    fn from(value: StateMachineNodeID) -> Self {
+        value.0
+    }
+}
+
 impl StateMachineMessageDestination {
     pub fn matches(&self, participant: StateMachineMessageParticipantID) -> Result<bool, HarnessError> {
         match self {
@@ -224,6 +230,10 @@ impl<'a> StateMachineContext {
     pub fn get_envelopes(&self, action: StateMachineActionID) -> Option<impl Iterator<Item = &StateMachineMessageEnvelope>> {
         self.actions.get(&action)
             .map(| action_data | action_data.envelopes.iter())
+    }
+
+    pub fn get_all_nodes(&self) -> impl Iterator<Item = StateMachineNodeID> {
+        self.nodes.keys().map(| x | *x)
     }
 
     pub fn get_nodes_reachable_from(&self, root: StateMachineNodeID) -> Result<Vec<StateMachineNodeID>, HarnessError> {

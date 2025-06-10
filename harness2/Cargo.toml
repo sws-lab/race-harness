@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 mlua = { version = "0.10", features = ["lua54", "vendored"] }
+rusqlite = { version = "0.36.0", features = ["bundled", "functions"] }
