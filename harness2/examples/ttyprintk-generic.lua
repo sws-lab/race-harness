@@ -75,7 +75,12 @@ function new_ttyprintk_model(num_of_clients)
     }
 end
 
-model1 = new_ttyprintk_model(1)
--- model2 = new_ttyprintk_model(1)
-swap_task_model(model1.context)
-tty_clients = model1.tty_clients
+abstract_model = new_ttyprintk_model(1)
+concrete_model = new_ttyprintk_model(3)
+add_abstract_model('abstract', abstract_model.context)
+swap_task_model(concrete_model.context)
+tty_clients = concrete_model.tty_clients
+
+set_concretization([[
+    # TODO
+]])

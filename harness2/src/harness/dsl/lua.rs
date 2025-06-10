@@ -2,15 +2,15 @@ use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc, sync::Arc}
 
 use mlua::{AnyUserData, IntoLua};
 
-use crate::harness::{core::{error::HarnessError, state_machine::StateMachineMessageEnvelopeBehavior}, frontend::{model::{HarnessModel, HarnessModelSymbol}, template::HarnessTemplate}};
+use crate::harness::{core::{error::HarnessError, state_machine::StateMachineMessageEnvelopeBehavior}, frontend::{symbolic_model::{HarnessSymbolicModel, HarnessModelSymbol}, template::HarnessSymbolicTemplate}};
 
 use super::parser::TemplateFragment;
 
-pub struct LuaTemplateInterpreter {}
-
-pub struct TemplateInterpreterResults {
-    pub model: HarnessModel,
-    pub template: HarnessTemplate
+pub struct InterpretedLuaModelTemplate {
+    concrete_model: HarnessSymbolicModel,
+    abstract_models: HashMap<String, HarnessSymbolicModel>,
+    concretization: Option<String>,
+    template: HarnessSymbolicTemplate
 }
 
 #[derive(Clone)]
@@ -21,14 +21,14 @@ struct TemplateSymbolLuaValue {
 
 #[derive(Clone)]
 struct HarnessModelHandle {
-    context: HarnessModel,
+    context: HarnessSymbolicModel,
     symbols: HashMap<String, HarnessModelSymbol>
 }
 
 #[derive(Clone)]
 struct HarnessContextValue {
     context: Rc<RefCell<HarnessModelHandle>>,
-    template: Rc<RefCell<HarnessTemplate>>
+    template: Rc<RefCell<HarnessSymbolicTemplate>>
 }
 
 enum EnvelopeBehavior {
@@ -55,13 +55,17 @@ fn into_optional_symbol(value: mlua::Value) -> mlua::Result<Option<HarnessModelS
             .symbol))
     }
 }
-    
-fn map_lua_error(err: mlua::Error) -> HarnessError {
-    HarnessError::new(err.to_string())
+
+impl From<mlua::Error> for HarnessError {
+    fn from(value: mlua::Error) -> Self {
+        HarnessError::new(value.to_string())
+    }
 }
 
-fn map_harness_error(err: HarnessError) -> mlua::Error {
-    mlua::Error::ExternalError(Arc::new(err))
+impl From<HarnessError> for mlua::Error {
+    fn from(value: HarnessError) -> Self {
+        mlua::Error::ExternalError(Arc::new(value))
+    }
 }
 
 impl mlua::IntoLua for EnvelopeBehavior {
@@ -101,7 +105,7 @@ impl TemplateSymbolLuaValue {
 }
 
 impl HarnessModelHandle {
-    fn new(builder: HarnessModel) -> HarnessModelHandle {
+    fn new(builder: HarnessSymbolicModel) -> HarnessModelHandle {
         HarnessModelHandle {
             context: builder,
             symbols: HashMap::new()
@@ -115,7 +119,7 @@ impl mlua::UserData for TemplateSymbolLuaValue {
             this.harness.context.borrow_mut()
                 .context
                 .new_unicast_envelope(this.symbol, into_symbol(destination)?, behavior.into(), into_symbol(message)?)
-                .map_err(map_harness_error)?;
+                ?;
             Ok(this.clone())
         });
 
@@ -131,7 +135,7 @@ impl mlua::UserData for TemplateSymbolLuaValue {
             this.harness.context.borrow_mut()
                 .context
                 .new_multicast_envelope(this.symbol, destinations.into_iter(), behavior.into(), into_symbol(message)?)
-                .map_err(map_harness_error)?;
+                ?;
             Ok(this.clone())
         });
 
@@ -139,28 +143,28 @@ impl mlua::UserData for TemplateSymbolLuaValue {
             this.harness.context.borrow_mut()
                 .context
                 .new_response_envelope(this.symbol, behavior.into(), into_symbol(message)?)
-                .map_err(map_harness_error)?;
+                ?;
             Ok(this.clone())
         });
 
         methods.add_method("exec", | _, this, action: String | {
             this.harness.template.borrow_mut()
                 .set_action_content(this.symbol, action)
-                .map_err(map_harness_error)?;
+                ?;
             Ok(this.clone())
         });
 
         methods.add_method("setup", | _, this, prologue: String | {
             this.harness.template.borrow_mut()
                 .append_process_prologue(this.symbol, prologue)
-                .map_err(map_harness_error)?;
+                ?;
             Ok(this.clone())
         });
 
         methods.add_meta_method("__newindex", | _, this, (key, value): (String, mlua::Value) | {
             this.harness.template.borrow_mut()
                 .set_process_parameter(this.symbol, key, value.to_string()?)
-                .map_err(map_harness_error)?;
+                ?;
             Ok(this.clone())
         });
 
@@ -177,7 +181,7 @@ impl mlua::UserData for TemplateSymbolLuaValue {
             let symbol = this.harness.context.borrow_mut()
                 .context
                 .new_product_state(&mnemonic, this.symbol, other_processes.into_iter())
-                .map_err(map_harness_error)?;
+                ?;
             let symbol_value = TemplateSymbolLuaValue::new(this.harness.clone(), symbol);
             this.harness.context.borrow_mut().symbols.insert(mnemonic, symbol);
             Ok(symbol_value)
@@ -195,7 +199,7 @@ impl mlua::UserData for TemplateSymbolLuaValue {
             let symbol = this.harness.context.borrow_mut()
                 .context
                 .new_product_element_state(this.symbol, structure)
-                .map_err(map_harness_error)?;
+                ?;
             let symbol_value = TemplateSymbolLuaValue::new(this.harness.clone(), symbol);
             Ok(symbol_value)
         });
@@ -206,7 +210,7 @@ impl mlua::UserData for HarnessContextValue {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("new_state", | _, this, mnemonic: String | {
             let symbol = this.context.borrow_mut().context.new_primitive_state(&mnemonic)
-                .map_err(map_harness_error)?;
+                ?;
             let symbol_value = TemplateSymbolLuaValue::new(this.clone(), symbol);
             this.context.borrow_mut().symbols.insert(mnemonic, symbol);
             Ok(symbol_value)
@@ -214,7 +218,7 @@ impl mlua::UserData for HarnessContextValue {
 
         methods.add_method("new_message", | _, this, mnemonic: String | {
             let symbol = this.context.borrow_mut().context.new_message(&mnemonic)
-                .map_err(map_harness_error)?;
+                ?;
             let symbol_value = TemplateSymbolLuaValue::new(this.clone(), symbol);
             this.context.borrow_mut().symbols.insert(mnemonic, symbol);
             Ok(symbol_value)
@@ -222,13 +226,13 @@ impl mlua::UserData for HarnessContextValue {
 
         methods.add_method("new_edge", | _, this, (source, target, trigger, action): (mlua::Value, mlua::Value, mlua::Value, mlua::Value)| {
             this.context.borrow_mut().context.new_edge(into_symbol(source)?, into_symbol(target)?, into_optional_symbol(trigger)?, into_optional_symbol(action)?)
-                .map_err(map_harness_error)?;
+                ?;
             Ok(())
         });
 
         methods.add_method("new_action", | _, this, mnemonic: String | {
             let symbol = this.context.borrow_mut().context.new_action(&mnemonic)
-                .map_err(map_harness_error)?;
+                ?;
             let symbol_value = TemplateSymbolLuaValue::new(this.clone(), symbol);
             this.context.borrow_mut().symbols.insert(mnemonic, symbol);
             Ok(symbol_value)
@@ -236,7 +240,7 @@ impl mlua::UserData for HarnessContextValue {
 
         methods.add_method("new_process", | _, this, (mnemonic, entry): (String, mlua::Value) | {
             let symbol = this.context.borrow_mut().context.new_process(&mnemonic, into_symbol(entry)?)
-                .map_err(map_harness_error)?;
+                ?;
             let symbol_value = TemplateSymbolLuaValue::new(this.clone(), symbol);
             this.context.borrow_mut().symbols.insert(mnemonic, symbol);
             Ok(symbol_value)
@@ -264,12 +268,60 @@ impl mlua::UserData for HarnessContextValue {
     }
 }
 
-impl LuaTemplateInterpreter {
-    pub fn new() -> LuaTemplateInterpreter {
-        LuaTemplateInterpreter {}
+impl InterpretedLuaModelTemplate {
+    pub fn new(fragments: impl Iterator<Item= TemplateFragment>, include_base_path: Option<PathBuf>) -> Result<InterpretedLuaModelTemplate, HarnessError> {
+        let harness = HarnessContextValue {
+            context: Rc::new(RefCell::new(HarnessModelHandle::new(HarnessSymbolicModel::new()))),
+            template: Rc::new(RefCell::new(HarnessSymbolicTemplate::new()))
+        };
+        let mut lua = mlua::Lua::new();
+        Self::initialize(harness.template.clone(), &mut lua, include_base_path)?;
+        lua.globals().set("__task_model", harness.clone())?;
+        lua.globals().set("__abstract_models", lua.create_table()?)?;
+        Self::interpret_template(fragments, &harness.template, &mut lua)?;
+
+        let abstract_models_table = lua.globals().get::<mlua::Table>("__abstract_models")?;
+        let mut abstract_models = HashMap::default();
+        for pair in abstract_models_table.pairs::<String, mlua::AnyUserData>() {
+            let (model_name, model) = pair?;
+            let model = model.borrow_mut::<HarnessContextValue>()?;
+            let model = model.context.replace(HarnessModelHandle::new(HarnessSymbolicModel::new())).context;
+            abstract_models.insert(model_name, model);
+        }
+
+        let concretization = lua.globals().get::<Option<String>>("__concretization")?;
+
+        let model: AnyUserData = lua.globals().get("__task_model")?;
+        let model = model.borrow_mut::<HarnessContextValue>()?;
+        let template = model.template.replace(HarnessSymbolicTemplate::new());
+        let model = model.context.replace(HarnessModelHandle::new(HarnessSymbolicModel::new())).context;
+
+        Ok(InterpretedLuaModelTemplate {
+            concrete_model: model,
+            abstract_models,
+            concretization,
+            template
+        })
     }
 
-    fn initialize<'a, 'b: 'a>(&self, harness: HarnessContextValue, lua: &'b mut mlua::Lua, include_base_path: Option<PathBuf>) -> Result<(), HarnessError> {
+    pub fn get_concrete_model(&self) -> &HarnessSymbolicModel {
+        &self.concrete_model
+    }
+
+    pub fn get_concretization(&self) -> Option<&str> {
+        self.concretization.as_deref()
+    }
+
+    pub fn get_abstract_models(&self) -> impl Iterator<Item = (&str, &HarnessSymbolicModel)> {
+        self.abstract_models.iter()
+            .map(| (name, model ) | (name.as_str(), model))
+    }
+
+    pub fn get_template(&self) -> &HarnessSymbolicTemplate {
+        &self.template
+    }
+
+    fn initialize(template: Rc<RefCell<HarnessSymbolicTemplate>>, lua: &mut mlua::Lua, include_base_path: Option<PathBuf>) -> Result<(), HarnessError> {
         {
             let include_fn = lua.create_function(move |lua, filepath: String | {
                 let path = std::path::Path::new(&filepath);
@@ -281,62 +333,42 @@ impl LuaTemplateInterpreter {
                     path.to_path_buf()
                 };
                 lua.load(pathbuf).exec()
-            }).map_err(map_lua_error)?;
-            lua.globals().set("include", include_fn).map_err(map_lua_error)?;
+            })?;
+            lua.globals().set("include", include_fn)?;
         }
 
         {
             let new_task_model_fn = lua.create_function(move | _, () | {
                 let context = HarnessContextValue {
-                    context: Rc::new(RefCell::new(HarnessModelHandle::new(HarnessModel::new()))),
-                    template: harness.template.clone()
+                    context: Rc::new(RefCell::new(HarnessModelHandle::new(HarnessSymbolicModel::new()))),
+                    template: template.clone()
                 };
                 Ok(context)
-            }).map_err(map_lua_error)?;
-            lua.globals().set("new_task_model", new_task_model_fn).map_err(map_lua_error)?;
+            })?;
+            lua.globals().set("new_task_model", new_task_model_fn)?;
         }
 
-        lua.globals().set("BLOCK_ANY", EnvelopeBehavior::BlockAny).map_err(map_lua_error)?;
-        lua.globals().set("BLOCK_SAME", EnvelopeBehavior::BlockSame).map_err(map_lua_error)?;
-        lua.globals().set("REPLACE_ANY", EnvelopeBehavior::ReplaceAny).map_err(map_lua_error)?;
-        lua.globals().set("REPLACE_SAME", EnvelopeBehavior::ReplaceSame).map_err(map_lua_error)?;
+        lua.globals().set("BLOCK_ANY", EnvelopeBehavior::BlockAny)?;
+        lua.globals().set("BLOCK_SAME", EnvelopeBehavior::BlockSame)?;
+        lua.globals().set("REPLACE_ANY", EnvelopeBehavior::ReplaceAny)?;
+        lua.globals().set("REPLACE_SAME", EnvelopeBehavior::ReplaceSame)?;
 
-        lua.load(include_str!("prelude.lua")).exec().map_err(map_lua_error)?;
+        lua.load(include_str!("prelude.lua")).exec()?;
 
         Ok(())
     }
 
-    fn interpret_template<'a>(&self, fragments: impl Iterator<Item = TemplateFragment>, harness: HarnessContextValue, lua: &mut mlua::Lua) -> Result<(), HarnessError> {
-        lua.globals().set("__task_model", harness.clone()).map_err(map_lua_error)?;
+    fn interpret_template(fragments: impl Iterator<Item = TemplateFragment>, template: &RefCell<HarnessSymbolicTemplate>, lua: &mut mlua::Lua) -> Result<(), HarnessError> {
         for fragment in fragments {
             match fragment {
                 TemplateFragment::Verbatim(content) =>
-                    harness.template.borrow_mut().append_global_prologue(content),
+                    template.borrow_mut().append_global_prologue(content),
 
                 TemplateFragment::Interpreted(code) =>
-                    lua.load(code).exec().map_err(map_lua_error)?
+                    lua.load(code).exec()?
             }
         }
 
         Ok(())
-    }
-
-    pub fn interpret(&mut self, fragments: impl Iterator<Item = TemplateFragment>, include_base_path: Option<PathBuf>) -> Result<TemplateInterpreterResults, HarnessError> {
-        let harness = HarnessContextValue {
-            context: Rc::new(RefCell::new(HarnessModelHandle::new(HarnessModel::new()))),
-            template: Rc::new(RefCell::new(HarnessTemplate::new()))
-        };
-        let mut lua = mlua::Lua::new();
-        self.initialize(harness.clone(), &mut lua, include_base_path)?;
-        self.interpret_template(fragments, harness, &mut lua)?;
-        let model: AnyUserData = lua.globals().get("__task_model").map_err(map_lua_error)?;
-        let model = model.borrow_mut::<HarnessContextValue>().map_err(map_lua_error)?;
-        let template = model.template.replace(HarnessTemplate::new());
-        let model = model.context.replace(HarnessModelHandle::new(HarnessModel::new())).context;
-
-        Ok(TemplateInterpreterResults {
-            model,
-            template
-        })
     }
 }

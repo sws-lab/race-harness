@@ -28,6 +28,14 @@ function swap_task_model(ctx)
     return old_ctx
 end
 
+function add_abstract_model(name, model)
+    __abstract_models[name] = model
+end
+
+function set_concretization(concretization)
+    __concretization = concretization
+end
+
 setmetatable(_G, {
     __index = function (t, k)
         return __task_model[k]

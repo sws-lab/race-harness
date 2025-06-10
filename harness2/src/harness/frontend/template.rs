@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use crate::harness::{codegen::template::CodegenTemplate, core::error::HarnessError};
 
-use super::model::{HarnessModelBuild, HarnessModelSymbol};
+use super::symbolic_model::{HarnessSymbolicModelBuild, HarnessModelSymbol};
 
-struct HarnessProcessTemplate {
+struct HarnessProcessSymbolicTemplate {
     parameters: HashMap<String, String>,
     prologue: Option<String>
 }
@@ -13,16 +13,16 @@ struct HarnessActionTemplate {
     content: Option<String>
 }
 
-pub struct HarnessTemplate {
+pub struct HarnessSymbolicTemplate {
     action_templates: HashMap<HarnessModelSymbol, HarnessActionTemplate>,
-    process_templates: HashMap<HarnessModelSymbol, HarnessProcessTemplate>,
+    process_templates: HashMap<HarnessModelSymbol, HarnessProcessSymbolicTemplate>,
     global_prologue: Option<String>,
     executable: bool
 }
 
-impl HarnessTemplate {
-    pub fn new() -> HarnessTemplate {
-        HarnessTemplate {
+impl HarnessSymbolicTemplate {
+    pub fn new() -> HarnessSymbolicTemplate {
+        HarnessSymbolicTemplate {
             action_templates: HashMap::new(),
             process_templates: HashMap::new(),
             global_prologue: None,
@@ -70,7 +70,7 @@ impl HarnessTemplate {
         Ok(())
     }
 
-    pub fn build(&self, build: &HarnessModelBuild) -> Result<CodegenTemplate, HarnessError> {
+    pub fn build(&self, build: &HarnessSymbolicModelBuild) -> Result<CodegenTemplate, HarnessError> {
         let mut template = CodegenTemplate::new();
 
         if let Some(prologue) = &self.global_prologue {
@@ -97,8 +97,8 @@ impl HarnessTemplate {
         Ok(template)
     }
 
-    fn get_process_template_mut(&mut self, process: HarnessModelSymbol) -> &mut HarnessProcessTemplate {
-        self.process_templates.entry(process).or_insert(HarnessProcessTemplate {
+    fn get_process_template_mut(&mut self, process: HarnessModelSymbol) -> &mut HarnessProcessSymbolicTemplate {
+        self.process_templates.entry(process).or_insert(HarnessProcessSymbolicTemplate {
             parameters: HashMap::new(),
             prologue: None
         })
