@@ -66,7 +66,7 @@ impl ProcessState {
             for &trigger in triggers {
                 let mut new_state = self.clone();
                 new_state.inbox.remove(&origin);
-                for transition in self.next_triggered_transitions(context, process_set, trigger, new_state)? {
+                for transition in self.next_triggered_transitions(context, process_set, (origin, trigger), new_state)? {
                     transitions.push(transition);
                     has_triggered_transitions = true;
                 }
@@ -78,13 +78,13 @@ impl ProcessState {
         Ok(transitions)
     }
 
-    fn next_triggered_transitions(&self, context: &StateMachineContext, process_set: &ProcessSet, trigger: StateMachineMessageID, state: ProcessState) -> Result<Vec<(ProcessState, StateMachineEdgeID, Vec<StateMachineMessageEnvelope>)>, HarnessError> {
+    fn next_triggered_transitions(&self, context: &StateMachineContext, process_set: &ProcessSet, trigger: (ProcessID, StateMachineMessageID), state: ProcessState) -> Result<Vec<(ProcessState, StateMachineEdgeID, Vec<StateMachineMessageEnvelope>)>, HarnessError> {
         let mut transitions = Vec::new();
         let conditinal_edges = context.get_edges_from(state.node)
             .expect("Expected node to exist")  
-            .filter(| edge | context.get_edge_trigger(*edge) == Some(trigger));
+            .filter(| edge | context.get_edge_trigger(*edge) == Some(trigger.1));
         for edge in conditinal_edges {
-            transitions.push(self.next_transition_for_edge(context, process_set, state.clone(), edge)?);
+            transitions.push(self.next_transition_for_edge(context, process_set, state.clone(), edge, Some(trigger.0))?);
         }
         Ok(transitions)
     }
@@ -95,17 +95,17 @@ impl ProcessState {
             .expect("Expected node to exist")
             .filter(| edge | context.get_edge_trigger(*edge).is_none());
         for edge in unconditional_edges {
-            transitions.push(self.next_transition_for_edge(context, process_set, self.clone(), edge)?);
+            transitions.push(self.next_transition_for_edge(context, process_set, self.clone(), edge, None)?);
         }
         Ok(transitions)
     }
 
-    fn next_transition_for_edge(&self, context: &StateMachineContext, process_set: &ProcessSet, state: ProcessState, edge: StateMachineEdgeID) -> Result<(ProcessState, StateMachineEdgeID, Vec<StateMachineMessageEnvelope>), HarnessError> {
+    fn next_transition_for_edge(&self, context: &StateMachineContext, process_set: &ProcessSet, state: ProcessState, edge: StateMachineEdgeID, trigger_origin: Option<ProcessID>) -> Result<(ProcessState, StateMachineEdgeID, Vec<StateMachineMessageEnvelope>), HarnessError> {
         let action = context.get_edge_action(edge);
         let outbound_envelopes = match action {
             Some(action) => context.get_envelopes(action)
                 .expect("Expected action to exist")
-                .map(| envelope | process_set.map_outbound_message(self.process_id, edge, envelope))
+                .map(| envelope | process_set.map_outbound_message(self.process_id, trigger_origin, edge, envelope))
                 .collect::<Result<Vec<StateMachineMessageEnvelope>, HarnessError>>()?,
             None => Vec::new()
         };
@@ -162,6 +162,16 @@ impl ProcessSetState {
             .collect();
         ProcessSetState {
             processes
+        }
+    }
+
+    pub fn new_from(processes: impl Iterator<Item = (ProcessID, StateMachineNodeID)>) -> ProcessSetState {
+        ProcessSetState {
+            processes: processes.map(| (process, state) | (process, ProcessState {
+                process_id: process,
+                node: state,
+                inbox: BTreeMap::default()
+            })).collect()
         }
     }
 
@@ -266,6 +276,10 @@ impl ProcessSetState {
 }
 
 impl ProcessSetStateSpace {
+    pub fn new(states: impl Iterator<Item = ProcessSetState>) -> ProcessSetStateSpace {
+        ProcessSetStateSpace { states: states.collect() }
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &ProcessSetState> {
         self.states.iter()
     }

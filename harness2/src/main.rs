@@ -1,8 +1,8 @@
-use std::{collections::BTreeMap, io::Read, path::Path};
+use std::{collections::{BTreeMap, HashMap}, io::Read, path::Path};
 
 use harness::{codegen::{codegen::ControlFlowCodegen, executable::ControlFlowExecutableCodegen, goblint::ControlFlowGoblintCodegen, output::WriteCodegenOutput}, control_flow::{builder::ControlFlowBuilder, mutex::ControlFlowMutexSet}, core::{error::HarnessError, mutex::mutex::ProcessSetMutualExclusion}, dsl::{parser::TemplateParser}};
 
-use crate::harness::{dsl::lua::InterpretedLuaModelTemplate, frontend::model::HarnessModel};
+use crate::harness::{dsl::lua::InterpretedLuaModelTemplate, frontend::{model::HarnessModel, symbolic_model}, relations::{concretization::HarnessModelConcretization, db::Sqlite3RelationsDb}};
 
 pub mod harness;
 
@@ -18,9 +18,24 @@ fn main() {
     let codegen_template = template_models.get_template().build(concrete_model.get_symbolic_model_build()).unwrap();
 
     let state_space = match &template_models.get_concretization() {
-        Some(_) => {
-            // TODO
-            concrete_model.get_processes().get_state_space(concrete_model.get_context()).unwrap()
+        Some(concretization) => {
+            let mut abstract_models = HashMap::new();
+            for (name, symbolic_model) in template_models.get_abstract_models() {
+                let model = HarnessModel::new(symbolic_model).unwrap();
+                abstract_models.insert(name, model);
+            }
+
+            let mut concretizer = HarnessModelConcretization::new(&concrete_model);
+            for (&name, abstract_model) in &abstract_models {
+                concretizer.add_abstract_model(name, abstract_model);
+            }
+            for (name, mapping) in template_models.get_mappings() {
+                let source_model = abstract_models.get(mapping.get_source_model_name()).unwrap();
+                let target_model = &concrete_model; // abstract_models.get(mapping.get_target_model_name()).unwrap();
+                let mapping_build = mapping.build(source_model.get_symbolic_model_build(), target_model.get_symbolic_model_build()).unwrap();
+                concretizer.add_mapping(name, mapping.get_source_model_name(), mapping.get_target_model_name(), mapping_build);
+            }
+            concretizer.concretize(concretization).unwrap()
         },
         None => concrete_model.get_processes().get_state_space(concrete_model.get_context()).unwrap()
     };

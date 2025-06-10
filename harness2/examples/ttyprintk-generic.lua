@@ -27,8 +27,8 @@ function new_ttyprintk_model(num_of_clients)
     S('tty_driver_unloaded_state')
     S('tty_driver_loading_state')
     S('tty_driver_unloading_state')
-    S('tty_driver_client_inactive_substate')
-    S('tty_driver_client_active_substate')
+    S('tty_driver_clients_inactive_state')
+    S('tty_driver_clients_active_state')
 
     local tty_clients = {}
     for i = 1, num_of_clients do
@@ -36,8 +36,6 @@ function new_ttyprintk_model(num_of_clients)
         tty_clients[i].client_id = i;
     end
     P('tty_driver', tty_driver_unloaded_state)
-
-    tty_driver_client_inactive_substate:product('tty_driver_loaded_state', tty_clients)
 
     tty_driver_loaded_action:multicast(tty_clients, BLOCK_ANY, tty_driver_loaded_msg)
     tty_client_request_connection_action:unicast(tty_driver, BLOCK_ANY, tty_client_request_connection_msg)
@@ -62,12 +60,12 @@ function new_ttyprintk_model(num_of_clients)
     E(tty_driver_unloaded_state, tty_driver_unloaded_state, nil, nil)
     E(tty_driver_unloaded_state, tty_driver_loading_state, nil, tty_driver_load_action)
     E(tty_driver_loading_state, tty_driver_loading_state, nil, nil)
-    E(tty_driver_loading_state, tty_driver_loaded_state, nil, tty_driver_loaded_action)
-    E(tty_driver_loaded_state, tty_driver_unloading_state, nil, tty_driver_unload_action)
+    E(tty_driver_loading_state, tty_driver_clients_inactive_state, nil, tty_driver_loaded_action)
+    E(tty_driver_clients_inactive_state, tty_driver_unloading_state, nil, tty_driver_unload_action)
     E(tty_driver_unloading_state, tty_driver_unloading_state, nil, nil)
     E(tty_driver_unloading_state, tty_driver_unloaded_state, nil, tty_driver_unloaded_action)
-    E(tty_driver_client_inactive_substate, tty_driver_client_active_substate, tty_client_request_connection_msg, tty_driver_grant_connection_action)
-    E(tty_driver_client_active_substate, tty_driver_client_inactive_substate, tty_client_disconnect_msg, nil)
+    E(tty_driver_clients_inactive_state, tty_driver_clients_active_state, tty_client_request_connection_msg, tty_driver_grant_connection_action)
+    E(tty_driver_clients_active_state, tty_driver_clients_inactive_state, tty_client_disconnect_msg, nil)
 
     return {
         context = swap_task_model(old_model),
@@ -81,6 +79,29 @@ add_abstract_model('abstract', abstract_model.context)
 swap_task_model(concrete_model.context)
 tty_clients = concrete_model.tty_clients
 
+add_mapping("DRV", 'abstract', 'concrete', {
+    [abstract_model.context.tty_driver_unloaded_state] = concrete_model.context.tty_driver_unloaded_state,
+    [abstract_model.context.tty_driver_loading_state] = concrete_model.context.tty_driver_loading_state,
+    [abstract_model.context.tty_driver_unloading_state] = concrete_model.context.tty_driver_unloading_state,
+    [abstract_model.context.tty_driver_clients_inactive_state] = concrete_model.context.tty_driver_clients_inactive_state,
+    [abstract_model.context.tty_driver_clients_active_state] = concrete_model.context.tty_driver_clients_active_state,
+})
+
+add_mapping("CLNT", 'abstract', 'concrete', {
+    [abstract_model.context.tty_client_nodriver_state] = concrete_model.context.tty_client_nodriver_state,
+    [abstract_model.context.tty_client_disconnected_state] = concrete_model.context.tty_client_disconnected_state,
+    [abstract_model.context.tty_client_disconnecting_state] = concrete_model.context.tty_client_disconnecting_state,
+    [abstract_model.context.tty_client_wait_connection_state] = concrete_model.context.tty_client_wait_connection_state,
+    [abstract_model.context.tty_client_connected_state] = concrete_model.context.tty_client_connected_state
+})
+
 set_concretization([[
-    # TODO
+    SELECT DISTINCT
+        DRV(a1.tty_driver) AS tty_driver,
+        CLNT(a1.tty_client1) AS tty_client1,
+        CLNT(a2.tty_client1) AS tty_client2,
+        CLNT(a3.tty_client1) AS tty_client3
+    FROM abstract AS a1
+    INNER JOIN abstract AS a2 ON a1.tty_driver = a2.tty_driver
+    INNER JOIN abstract AS a3 ON a1.tty_driver = a3.tty_driver
 ]])

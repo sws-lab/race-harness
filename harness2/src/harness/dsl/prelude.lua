@@ -36,6 +36,10 @@ function set_concretization(concretization)
     __concretization = concretization
 end
 
+function add_mapping(name, source, target, mapping)
+    __mappings[name] = { source, target, mapping }
+end
+
 setmetatable(_G, {
     __index = function (t, k)
         return __task_model[k]

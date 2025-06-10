@@ -1,15 +1,23 @@
+use core::arch;
 use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc, sync::Arc};
 
 use mlua::{AnyUserData, IntoLua};
 
-use crate::harness::{core::{error::HarnessError, state_machine::StateMachineMessageEnvelopeBehavior}, frontend::{symbolic_model::{HarnessSymbolicModel, HarnessModelSymbol}, template::HarnessSymbolicTemplate}};
+use crate::harness::{core::{error::HarnessError, state_machine::{StateMachineMessageEnvelopeBehavior, StateMachineNodeID}}, frontend::{symbolic_model::{HarnessModelSymbol, HarnessSymbolicModel, HarnessSymbolicModelBuild}, template::HarnessSymbolicTemplate}};
 
 use super::parser::TemplateFragment;
+
+pub struct HarnessSymbolicModelMapping {
+    source_model: String,
+    target_model: String,
+    mapping: HashMap<HarnessModelSymbol, HarnessModelSymbol>
+}
 
 pub struct InterpretedLuaModelTemplate {
     concrete_model: HarnessSymbolicModel,
     abstract_models: HashMap<String, HarnessSymbolicModel>,
     concretization: Option<String>,
+    mappings: HashMap<String, HarnessSymbolicModelMapping>,
     template: HarnessSymbolicTemplate
 }
 
@@ -268,6 +276,32 @@ impl mlua::UserData for HarnessContextValue {
     }
 }
 
+impl HarnessSymbolicModelMapping {
+    pub fn get_source_model_name(&self) -> &str {
+        &self.source_model
+    }
+
+    pub fn get_target_model_name(&self) -> &str {
+        &self.target_model
+    }
+
+    pub fn get_mapping(&self) -> &HashMap<HarnessModelSymbol, HarnessModelSymbol> {
+        &self.mapping
+    }
+
+    pub fn build(&self, source_build: &HarnessSymbolicModelBuild, target_build: &HarnessSymbolicModelBuild) -> Result<HashMap<StateMachineNodeID, StateMachineNodeID>, HarnessError> {
+        self.mapping.iter()
+            .map(| (source_symbol, target_symbol) | {
+                let source = source_build.get_state(*source_symbol)
+                    .ok_or(HarnessError::new("Unable to find mapped process node"))?;
+                let target = target_build.get_state(*target_symbol)
+                    .ok_or(HarnessError::new("Unable to find mapped process node"))?;
+                Ok((source, target))
+            })
+            .collect()
+    }
+}
+
 impl InterpretedLuaModelTemplate {
     pub fn new(fragments: impl Iterator<Item= TemplateFragment>, include_base_path: Option<PathBuf>) -> Result<InterpretedLuaModelTemplate, HarnessError> {
         let harness = HarnessContextValue {
@@ -278,6 +312,7 @@ impl InterpretedLuaModelTemplate {
         Self::initialize(harness.template.clone(), &mut lua, include_base_path)?;
         lua.globals().set("__task_model", harness.clone())?;
         lua.globals().set("__abstract_models", lua.create_table()?)?;
+        lua.globals().set("__mappings", lua.create_table()?)?;
         Self::interpret_template(fragments, &harness.template, &mut lua)?;
 
         let abstract_models_table = lua.globals().get::<mlua::Table>("__abstract_models")?;
@@ -287,6 +322,28 @@ impl InterpretedLuaModelTemplate {
             let model = model.borrow_mut::<HarnessContextValue>()?;
             let model = model.context.replace(HarnessModelHandle::new(HarnessSymbolicModel::new())).context;
             abstract_models.insert(model_name, model);
+        }
+
+        let mappings_table = lua.globals().get::<mlua::Table>("__mappings")?;
+        let mut mappings = HashMap::new();
+        for pair in mappings_table.pairs::<String, mlua::Table>() {
+            let (mapping_name, mapping_tuple) = pair?;
+            let mapping_source_model = mapping_tuple.get::<String>(1)?;
+            let mapping_target_model = mapping_tuple.get::<String>(2)?;
+            let mapping_table = mapping_tuple.get::<mlua::Table>(3)?;
+            let mut mapping = HashMap::new();
+            for mapping_pair in mapping_table.pairs() {
+                let (from_symbol, to_symbol): (mlua::AnyUserData, mlua::AnyUserData) = mapping_pair?;
+                let from_symbol = from_symbol.borrow::<TemplateSymbolLuaValue>()?;
+                let to_symbol = to_symbol.borrow::<TemplateSymbolLuaValue>()?;
+                mapping.insert(from_symbol.symbol, to_symbol.symbol);
+            }
+
+            mappings.insert(mapping_name, HarnessSymbolicModelMapping {
+                source_model: mapping_source_model,
+                target_model: mapping_target_model,
+                mapping
+            });
         }
 
         let concretization = lua.globals().get::<Option<String>>("__concretization")?;
@@ -300,6 +357,7 @@ impl InterpretedLuaModelTemplate {
             concrete_model: model,
             abstract_models,
             concretization,
+            mappings,
             template
         })
     }
@@ -315,6 +373,10 @@ impl InterpretedLuaModelTemplate {
     pub fn get_abstract_models(&self) -> impl Iterator<Item = (&str, &HarnessSymbolicModel)> {
         self.abstract_models.iter()
             .map(| (name, model ) | (name.as_str(), model))
+    }
+
+    pub fn get_mappings(&self) -> &HashMap<String, HarnessSymbolicModelMapping> {
+        &self.mappings
     }
 
     pub fn get_template(&self) -> &HarnessSymbolicTemplate {

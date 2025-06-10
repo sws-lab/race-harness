@@ -8,7 +8,8 @@ pub struct Sqlite3Model<'a> {
     context: &'a StateMachineContext,
     harness_db_id: i64,
     process_db_ids: HashMap<ProcessID, i64>,
-    node_db_ids: HashMap<StateMachineNodeID, i64>
+    node_db_ids: HashMap<StateMachineNodeID, i64>,
+    reverse_node_db_ids: HashMap<i64, StateMachineNodeID>
 }
 
 impl<'a> Sqlite3Model<'a> {
@@ -40,6 +41,7 @@ impl<'a> Sqlite3Model<'a> {
         }
 
         let mut node_db_ids = HashMap::new();
+        let mut reverse_node_db_ids = HashMap::new();
         for node in context.get_all_nodes() {
             let node_mnemonic = context.get_node_mnemonic(node)
                 .ok_or(HarnessError::new("Unable to retrieve process mnemonic"))?;
@@ -48,6 +50,7 @@ impl<'a> Sqlite3Model<'a> {
                 .expect("Expected node identifier to exist")
                 .get(0)?;
             node_db_ids.insert(node, node_id);
+            reverse_node_db_ids.insert(node_id, node);
         }
 
         let model = Sqlite3Model {
@@ -56,7 +59,8 @@ impl<'a> Sqlite3Model<'a> {
             context,
             harness_db_id,
             process_db_ids,
-            node_db_ids
+            node_db_ids,
+            reverse_node_db_ids
         };
         model.initialize_views(&name)?;
         Ok(model)
@@ -80,6 +84,10 @@ impl<'a> Sqlite3Model<'a> {
 
     pub fn get_node_db_id(&self, node: StateMachineNodeID) -> Option<i64> {
         self.node_db_ids.get(&node).map(| x | *x)
+    }
+
+    pub fn get_node_by_db_id(&self, node_db_id: i64) -> Option<StateMachineNodeID> {
+        self.reverse_node_db_ids.get(&node_db_id).map(| x | *x)
     }
 
     fn initialize_views(&self, name: &str) -> Result<(), Sqlite3RelationsDbError> {

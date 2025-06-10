@@ -1,4 +1,6 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, env};
+
+use crate::harness::core::state_machine::StateMachineMessageDestination;
 
 use super::{process_state::{ProcessSetState, ProcessSetStateSpace}, error::HarnessError, state_machine::{StateMachineContext, StateMachineEdgeID, StateMachineMessageEnvelope, StateMachineMessageID, StateMachineMessageParticipantID, StateMachineNodeID}};
 
@@ -88,7 +90,7 @@ impl ProcessSet {
         Ok(message)
     }
 
-    pub fn map_outbound_message(&self, sender_id: ProcessID, origin_edge: StateMachineEdgeID, envelope: &StateMachineMessageEnvelope) -> Result<StateMachineMessageEnvelope, HarnessError> {
+    pub fn map_outbound_message(&self, sender_id: ProcessID, trigger_origin_id: Option<ProcessID>, origin_edge: StateMachineEdgeID, envelope: &StateMachineMessageEnvelope) -> Result<StateMachineMessageEnvelope, HarnessError> {
         let mappings = &self.processes.get(&sender_id).ok_or(HarnessError::new("Unable to find a process to map outbound message"))?.outbound_message_mappings;
         for mapping in mappings {
             match mapping(origin_edge, &envelope) {
@@ -96,7 +98,15 @@ impl ProcessSet {
                 None => ()
             }
         }
-        Ok(envelope.clone())
+
+        let envelope = match (trigger_origin_id, envelope.get_destination()) {
+            (Some(trigger_origin), StateMachineMessageDestination::Response) => {
+                envelope.redirect(StateMachineMessageDestination::Unicast(trigger_origin.into()))
+            },
+
+            _ => envelope.clone()
+        };
+        Ok(envelope)
     }
 
     pub fn get_initial_state(&self) -> ProcessSetState {
