@@ -1,4 +1,4 @@
-use crate::harness::{core::{error::HarnessError, process::ProcessSet, state_machine::StateMachineContext}, frontend::symbolic_model::{self, HarnessSymbolicModel, HarnessSymbolicModelBuild}};
+use crate::harness::{core::{error::HarnessError, process::ProcessSet, state_machine::StateMachineContext}, frontend::symbolic_model::{HarnessSymbolicModel, HarnessSymbolicModelBuild}};
 
 pub struct HarnessModel {
     context: StateMachineContext,

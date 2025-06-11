@@ -151,7 +151,7 @@ function new_ttyprintk_concrete_model(num_of_clients)
 end
 
 abstract_model = new_ttyprintk_abstract_model(2)
-concrete_model = new_ttyprintk_concrete_model(6)
+concrete_model = new_ttyprintk_concrete_model(8)
 add_abstract_model('abstract', abstract_model.context)
 swap_task_model(concrete_model.context)
 tty_clients = concrete_model.tty_clients
@@ -174,19 +174,37 @@ add_mapping("CLNT", 'abstract', 'concrete', {
     [abstract_model.context.tty_client_connected_state] = concrete_model.context.tty_client_connected_state
 })
 
-set_concretization([[
-    SELECT DISTINCT
-        DRV(a1.tty_driver) AS tty_driver,
-        CLNT(a1.tty_client1) AS tty_client1,
-        CLNT(a2.tty_client2) AS tty_client2,
-        CLNT(a3.tty_client2) AS tty_client3,
-        CLNT(a4.tty_client2) AS tty_client4,
-        CLNT(a5.tty_client2) AS tty_client5,
-        CLNT(a6.tty_client2) AS tty_client6
-    FROM abstract AS a1
-    INNER JOIN abstract AS a2 ON DRV(a1.tty_driver) = DRV(a2.tty_driver) AND a1.tty_client1 = a2.tty_client1
-    INNER JOIN abstract AS a3 ON DRV(a1.tty_driver) = DRV(a3.tty_driver) AND a1.tty_client1 = a3.tty_client1
-    INNER JOIN abstract AS a4 ON DRV(a1.tty_driver) = DRV(a4.tty_driver) AND a1.tty_client1 = a4.tty_client1
-    INNER JOIN abstract AS a5 ON DRV(a1.tty_driver) = DRV(a5.tty_driver) AND a1.tty_client1 = a5.tty_client1
-    INNER JOIN abstract AS a6 ON DRV(a1.tty_driver) = DRV(a6.tty_driver) AND a1.tty_client1 = a6.tty_client1
+add_query([[
+    CREATE TABLE mapped_abstract AS
+        SELECT DISTINCT
+            DRV(tty_driver) AS tty_driver,
+            CLNT(tty_client1) AS tty_client1,
+            CLNT(tty_client2) AS tty_client2
+        FROM abstract;
+
+    CREATE INDEX mapped_abstract_tty_driver ON mapped_abstract(tty_driver);
+    CREATE INDEX mapped_abstract_tty_client1 ON mapped_abstract(tty_client1);
+    CREATE INDEX mapped_abstract_tty_client2 ON mapped_abstract(tty_client2);
+
+    CREATE VIEW concrete AS
+        SELECT
+            a1.tty_driver AS tty_driver,
+            a1.tty_client1 AS tty_client1,
+            a2.tty_client2 AS tty_client2,
+            a3.tty_client2 AS tty_client3,
+            a4.tty_client2 AS tty_client4,
+            a5.tty_client2 AS tty_client5,
+            a6.tty_client2 AS tty_client6,
+            a7.tty_client2 AS tty_client7,
+            a8.tty_client2 AS tty_client8
+        FROM mapped_abstract AS a1
+        INNER JOIN mapped_abstract AS a2 ON a1.tty_driver = a2.tty_driver AND a1.tty_client1 = a2.tty_client1
+        INNER JOIN mapped_abstract AS a3 ON a1.tty_driver = a3.tty_driver AND a1.tty_client1 = a3.tty_client1
+        INNER JOIN mapped_abstract AS a4 ON a1.tty_driver = a4.tty_driver AND a1.tty_client1 = a4.tty_client1
+        INNER JOIN mapped_abstract AS a5 ON a1.tty_driver = a5.tty_driver AND a1.tty_client1 = a5.tty_client1
+        INNER JOIN mapped_abstract AS a6 ON a1.tty_driver = a6.tty_driver AND a1.tty_client1 = a6.tty_client1
+        INNER JOIN mapped_abstract AS a7 ON a1.tty_driver = a7.tty_driver AND a1.tty_client1 = a7.tty_client1
+        INNER JOIN mapped_abstract AS a8 ON a1.tty_driver = a8.tty_driver AND a1.tty_client1 = a8.tty_client1
 ]])
+
+set_concretization('concrete')

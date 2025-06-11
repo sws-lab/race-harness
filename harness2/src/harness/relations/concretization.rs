@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
-use crate::harness::{core::{error::HarnessError, process_state::{ProcessSetState, ProcessSetStateSpace}, state_machine::StateMachineNodeID}, frontend::model::HarnessModel, relations::{db::Sqlite3RelationsDb, error::Sqlite3RelationsDbError}};
+use crate::harness::{core::{error::HarnessError, reachability::{ProcessReachabilityPair, ProcessStateReachability}, state_machine::StateMachineNodeID}, frontend::model::HarnessModel, relations::{db::Sqlite3RelationsDb, error::Sqlite3RelationsDbError}};
 
 pub struct HarnessModelConcretization<'a> {
     abstract_models: HashMap<String, &'a HarnessModel>,
     concrete_model: &'a HarnessModel,
-    mappings: HashMap<String, (String, String, HashMap<StateMachineNodeID, StateMachineNodeID>)>
+    mappings: HashMap<String, (String, String, HashMap<StateMachineNodeID, StateMachineNodeID>)>,
+    queries: Vec<String>
 }
 
 impl<'a> HarnessModelConcretization<'a> {
@@ -13,7 +14,8 @@ impl<'a> HarnessModelConcretization<'a> {
         HarnessModelConcretization {
             abstract_models: HashMap::default(),
             concrete_model,
-            mappings: HashMap::default()
+            mappings: HashMap::default(),
+            queries: Vec::new()
         }
     }
 
@@ -25,14 +27,18 @@ impl<'a> HarnessModelConcretization<'a> {
         self.mappings.insert(name.into(), (source.into(), target.into(), mapping));
     }
 
-    pub fn concretize(&self, concretization: &str) -> Result<ProcessSetStateSpace, Sqlite3RelationsDbError> {
-        let db = rusqlite::Connection::open_in_memory()?;
+    pub fn add_query(&mut self, query: impl Into<String>) {
+        self.queries.push(query.into());
+    }
+
+    pub fn construct_reachability(&self, db: &rusqlite::Connection, concretization: &str) -> Result<ProcessStateReachability, Sqlite3RelationsDbError> {
         let relation_db = Sqlite3RelationsDb::new(&db)?;
         let mut db_models = HashMap::new();
         for (name, abstract_model) in &self.abstract_models {
             let state_space = abstract_model.get_processes().get_state_space(abstract_model.get_context())?;
             let db_model = relation_db.new_model(abstract_model.get_processes(), abstract_model.get_context(), name)?;
             let _ = db_model.new_state_space(&state_space, name)?;
+            db_model.materialize(&name)?;
             db_models.insert(name.clone(), db_model);
         }
 
@@ -61,27 +67,38 @@ impl<'a> HarnessModelConcretization<'a> {
             })?;
         }
 
-        let mut concretization_stmt = db.prepare(concretization)?;
-        let mut concrete_space_cursor = concretization_stmt.query(())?;
-        let mut space = Vec::new();
-        loop {
-            let row = match concrete_space_cursor.next().unwrap() {
-                Some(row) => row,
-                None => break
-            };
-    
-            let mut psstate = Vec::new();
-            for process in self.concrete_model.get_processes().iter() {
-                let process_mnemonic = self.concrete_model.get_processes().get_process_mnemonic(process)
-                    .ok_or(HarnessError::new("Unable to retrieve process mnemonic"))?;
-                let process_state = row.get::<_, i64>(process_mnemonic)?;
-                let node = db_models.get("concrete").unwrap().get_node_by_db_id(process_state)
-                    .ok_or(HarnessError::new("Unable to find process node for provided db identifier"))?;
-                psstate.push((process, node));
-            }
-            let psstate = ProcessSetState::new_from(psstate.into_iter());
-            space.push(psstate);
+        for query in &self.queries {
+            let _ = db.execute_batch(query)?;
         }
-        Ok(ProcessSetStateSpace::new(space.into_iter()))
+
+        let mut reachability = ProcessStateReachability::new();
+        let processes = self.concrete_model.get_processes().iter().collect::<Vec<_>>();
+        for (process_idx, &process) in processes.iter().enumerate() {
+            let process_mnemonic = self.concrete_model.get_processes().get_process_mnemonic(process)
+                .ok_or(HarnessError::new("Unable to retrieve process mnemonic"))?;
+            for other_process in self.concrete_model.get_processes().iter().skip(process_idx).filter(| proc | *proc != process) {
+                let other_process_mnemonic = self.concrete_model.get_processes().get_process_mnemonic(other_process)
+                    .ok_or(HarnessError::new("Unable to retrieve process mnemonic"))?;
+
+                let mut concretization_pair_stmt = db.prepare(format!("SELECT DISTINCT {}, {} FROM {}", process_mnemonic, other_process_mnemonic, concretization).as_str())?;
+                let mut concrete_pair_cursor = concretization_pair_stmt.query(())?;
+                loop {
+                    let row = match concrete_pair_cursor.next().unwrap() {
+                        Some(row) => row,
+                        None => break
+                    };
+
+                    let process_state = row.get::<_, i64>(0)?;
+                    let other_process_state = row.get::<_, i64>(1)?;
+                    let node = db_models.get("concrete").unwrap().get_node_by_db_id(process_state)
+                        .ok_or(HarnessError::new("Unable to find process node for provided db identifier"))?;
+                    let other_node = db_models.get("concrete").unwrap().get_node_by_db_id(other_process_state)
+                        .ok_or(HarnessError::new("Unable to find process node for provided db identifier"))?;
+            
+                    reachability.mark_cooccuring(&ProcessReachabilityPair::new(process, node, other_process, other_node));
+                }
+            }
+        }
+        Ok(reachability)
     }
 }

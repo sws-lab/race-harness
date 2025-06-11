@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 
-use crate::harness::{core::{error::HarnessError, process::{ProcessID, ProcessSet}, process_state::ProcessSetStateSpace, state_machine::{StateMachineContext, StateMachineNodeID}}, relations::{error::Sqlite3RelationsDbError, state_space::{self, Sqlite3StateSpace}}};
+use crate::harness::{core::{error::HarnessError, process::{ProcessID, ProcessSet}, process_state::ProcessSetStateSpace, state_machine::{StateMachineContext, StateMachineNodeID}}, relations::{error::Sqlite3RelationsDbError, state_space::Sqlite3StateSpace}};
 
 pub struct Sqlite3Model<'a> {
     connection: &'a rusqlite::Connection,
     processes: &'a ProcessSet,
-    context: &'a StateMachineContext,
     harness_db_id: i64,
     process_db_ids: HashMap<ProcessID, i64>,
     node_db_ids: HashMap<StateMachineNodeID, i64>,
@@ -56,17 +55,15 @@ impl<'a> Sqlite3Model<'a> {
         let model = Sqlite3Model {
             connection,
             processes,
-            context,
             harness_db_id,
             process_db_ids,
             node_db_ids,
             reverse_node_db_ids
         };
-        model.initialize_views(&name)?;
         Ok(model)
     }
 
-    pub fn new_state_space<'b, T: Into<String>>(&'b self, state_space: &ProcessSetStateSpace, name: T) -> Result<Sqlite3StateSpace<'b>, Sqlite3RelationsDbError> {
+    pub fn new_state_space<T: Into<String>>(&self, state_space: &ProcessSetStateSpace, name: T) -> Result<Sqlite3StateSpace, Sqlite3RelationsDbError> {
         Sqlite3StateSpace::new(self.connection, self, state_space, name.into())
     }
 
@@ -90,23 +87,18 @@ impl<'a> Sqlite3Model<'a> {
         self.reverse_node_db_ids.get(&node_db_id).map(| x | *x)
     }
 
-    fn initialize_views(&self, name: &str) -> Result<(), Sqlite3RelationsDbError> {
+    pub fn materialize(&self, name: &str) -> Result<(), Sqlite3RelationsDbError> {
         // UGLY, UNSAFE and BAD, but nonetheless
-        let mut sql_query = String::from("CREATE VIEW IF NOT EXISTS ");
+        let mut sql_query = String::from("CREATE TABLE ");
         sql_query.push_str(name);
-        sql_query.push_str("(SpaceStateID");
-        for (_, process) in self.processes.get_processes().enumerate() {
-            sql_query.push_str(", ");
+        sql_query.push_str(" AS SELECT ");
+        for (idx, process) in self.processes.get_processes().enumerate() {
             let process_mnemonic = self.processes.get_process_mnemonic(process)
                 .ok_or(HarnessError::new("Unable to find process mnemonic"))?;
-            sql_query.push_str(process_mnemonic);
-        }
-        sql_query.push_str(") AS SELECT ");
-        for (idx, _) in self.processes.get_processes().enumerate() {
             if idx > 0 {
-                sql_query.push_str(format!(", state{}.NodeID", idx).as_str());
+                sql_query.push_str(format!(", state{}.NodeID AS {}", idx, process_mnemonic).as_str());
             } else {
-                sql_query.push_str("state0.SpaceStateID, state0.NodeID");
+                sql_query.push_str(format!("state0.SpaceStateID AS SpaceStateID, state0.NodeID AS {}", process_mnemonic).as_str());
             }
         }
         let mut where_clause = String::default();
@@ -121,8 +113,14 @@ impl<'a> Sqlite3Model<'a> {
             }
         }
         sql_query.push_str(where_clause.as_str());
-
         self.connection.execute(&sql_query, ())?;
+
+        for process in self.get_processes().iter() {
+            let process_mnemonic = self.get_processes().get_process_mnemonic(process)
+                .ok_or(HarnessError::new("Unable to find process mnemonic"))?;
+            self.connection.execute(format!("CREATE INDEX {}_{} ON {}({})", name, process_mnemonic, name, process_mnemonic).as_str(), ())?;
+        }
+
         Ok(())
     }
 }

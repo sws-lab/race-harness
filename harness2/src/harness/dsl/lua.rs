@@ -1,4 +1,3 @@
-use core::arch;
 use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc, sync::Arc};
 
 use mlua::{AnyUserData, IntoLua};
@@ -16,6 +15,7 @@ pub struct HarnessSymbolicModelMapping {
 pub struct InterpretedLuaModelTemplate {
     concrete_model: HarnessSymbolicModel,
     abstract_models: HashMap<String, HarnessSymbolicModel>,
+    queries: Vec<String>,
     concretization: Option<String>,
     mappings: HashMap<String, HarnessSymbolicModelMapping>,
     template: HarnessSymbolicTemplate
@@ -313,6 +313,7 @@ impl InterpretedLuaModelTemplate {
         lua.globals().set("__task_model", harness.clone())?;
         lua.globals().set("__abstract_models", lua.create_table()?)?;
         lua.globals().set("__mappings", lua.create_table()?)?;
+        lua.globals().set("__queries", lua.create_table()?)?;
         Self::interpret_template(fragments, &harness.template, &mut lua)?;
 
         let abstract_models_table = lua.globals().get::<mlua::Table>("__abstract_models")?;
@@ -346,6 +347,13 @@ impl InterpretedLuaModelTemplate {
             });
         }
 
+        let quries_table = lua.globals().get::<mlua::Table>("__queries")?;
+        let mut queries = Vec::new();
+        for pair in quries_table.pairs::<mlua::Value, String>() {
+            let (_, query) = pair?;
+            queries.push(query);
+        }
+
         let concretization = lua.globals().get::<Option<String>>("__concretization")?;
 
         let model: AnyUserData = lua.globals().get("__task_model")?;
@@ -356,6 +364,7 @@ impl InterpretedLuaModelTemplate {
         Ok(InterpretedLuaModelTemplate {
             concrete_model: model,
             abstract_models,
+            queries,
             concretization,
             mappings,
             template
@@ -381,6 +390,10 @@ impl InterpretedLuaModelTemplate {
 
     pub fn get_template(&self) -> &HarnessSymbolicTemplate {
         &self.template
+    }
+
+    pub fn get_queries(&self) -> impl Iterator<Item = &str> {
+        self.queries.iter().map(| x | x.as_str())
     }
 
     fn initialize(template: Rc<RefCell<HarnessSymbolicTemplate>>, lua: &mut mlua::Lua, include_base_path: Option<PathBuf>) -> Result<(), HarnessError> {

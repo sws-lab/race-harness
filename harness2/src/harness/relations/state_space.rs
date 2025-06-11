@@ -1,13 +1,9 @@
 use crate::harness::{core::{error::HarnessError, process_state::ProcessSetStateSpace}, relations::{error::Sqlite3RelationsDbError, model::Sqlite3Model}};
 
-pub struct Sqlite3StateSpace<'a> {
-    connection: &'a rusqlite::Connection,
-    model: &'a Sqlite3Model<'a>,
-    space_db_id: i64
-}
+pub struct Sqlite3StateSpace {}
 
-impl<'a> Sqlite3StateSpace<'a> {
-    pub fn new(connection: &'a rusqlite::Connection, model: &'a Sqlite3Model<'a>, state_space: &ProcessSetStateSpace, name: String) -> Result<Sqlite3StateSpace<'a>, Sqlite3RelationsDbError> {
+impl<'a> Sqlite3StateSpace {
+    pub fn new(connection: &'a rusqlite::Connection, model: &'a Sqlite3Model<'a>, state_space: &ProcessSetStateSpace, name: String) -> Result<Sqlite3StateSpace, Sqlite3RelationsDbError> {
         let mut space_insert_query = connection.prepare(r#"
             INSERT INTO Space (Name, ModelID) VALUES (?, ?) RETURNING ID
         "#)?;
@@ -41,11 +37,7 @@ impl<'a> Sqlite3StateSpace<'a> {
             }
         }
 
-        let db_space = Sqlite3StateSpace {
-            connection,
-            model,
-            space_db_id
-        };
+        let db_space = Sqlite3StateSpace {};
     
         Ok(db_space)
     }

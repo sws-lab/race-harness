@@ -2,7 +2,7 @@ use std::{collections::{BTreeMap, HashMap}, io::Read, path::Path};
 
 use harness::{codegen::{codegen::ControlFlowCodegen, executable::ControlFlowExecutableCodegen, goblint::ControlFlowGoblintCodegen, output::WriteCodegenOutput}, control_flow::{builder::ControlFlowBuilder, mutex::ControlFlowMutexSet}, core::{error::HarnessError, mutex::mutex::ProcessSetMutualExclusion}, dsl::{parser::TemplateParser}};
 
-use crate::harness::{dsl::lua::InterpretedLuaModelTemplate, frontend::{model::HarnessModel, symbolic_model}, relations::{concretization::HarnessModelConcretization, db::Sqlite3RelationsDb}};
+use crate::harness::{dsl::lua::InterpretedLuaModelTemplate, frontend::model::HarnessModel, relations::concretization::HarnessModelConcretization};
 
 pub mod harness;
 
@@ -17,7 +17,7 @@ fn main() {
     let concrete_model = HarnessModel::new(&template_models.get_concrete_model()).unwrap();
     let codegen_template = template_models.get_template().build(concrete_model.get_symbolic_model_build()).unwrap();
 
-    let state_space = match &template_models.get_concretization() {
+    let reachability = match &template_models.get_concretization() {
         Some(concretization) => {
             let mut abstract_models = HashMap::new();
             for (name, symbolic_model) in template_models.get_abstract_models() {
@@ -35,12 +35,21 @@ fn main() {
                 let mapping_build = mapping.build(source_model.get_symbolic_model_build(), target_model.get_symbolic_model_build()).unwrap();
                 concretizer.add_mapping(name, mapping.get_source_model_name(), mapping.get_target_model_name(), mapping_build);
             }
-            concretizer.concretize(concretization).unwrap()
+            for query in template_models.get_queries() {
+                concretizer.add_query(query);
+            }
+
+            let db = if let Ok(db_path) = std::env::var("HARNESSS_CONCRETIZATION_DB") {
+                rusqlite::Connection::open(db_path).unwrap()
+            } else {
+                rusqlite::Connection::open_in_memory().unwrap()
+            };
+            concretizer.construct_reachability(&db, concretization).unwrap()
         },
-        None => concrete_model.get_processes().get_state_space(concrete_model.get_context()).unwrap()
+        None => concrete_model.get_processes().get_state_space(concrete_model.get_context()).unwrap().derive_reachability()
     };
 
-    let mutual_exclusion = ProcessSetMutualExclusion::new(concrete_model.get_context(), concrete_model.get_processes(), &state_space.derive_reachability()).unwrap();
+    let mutual_exclusion = ProcessSetMutualExclusion::new(concrete_model.get_context(), concrete_model.get_processes(), &reachability).unwrap();
     let mutex_set = ControlFlowMutexSet::new(mutual_exclusion.iter());
     let control_flow_nodes = concrete_model.get_processes().get_processes()
         .map(| process | {
@@ -58,32 +67,4 @@ fn main() {
         let codegen = ControlFlowGoblintCodegen::new();
         codegen.format(&mut codegen_output, concrete_model.get_context(), concrete_model.get_processes(), &codegen_template, control_flow_nodes.iter().map(| (process, node) | (*process, node)), mutex_set.get_mutexes()).unwrap();
     }
-
-    // let conn = rusqlite::Connection::open_in_memory().unwrap();
-    // let db = Sqlite3RelationsDb::new(&conn).unwrap();
-    // let db_abstract_model = db.new_model(&process_set, &context, "abstract").unwrap();
-    // let _db_abstract_state_space = db_abstract_model.new_state_space(&state_space, "abstract1").unwrap();
-    
-    // let mut query = conn.prepare(r#"
-    //     SELECT n1.Name AS tty_driver, n2.Name AS tty_client1, n3.Name AS tty_client2, n4.Name AS tty_client3 FROM (
-    //         SELECT DISTINCT a1.tty_driver AS tty_driver, a1.tty_client1 AS tty_client1, a2.tty_client1 AS tty_client2, a3.tty_client1 AS tty_client3
-    //         FROM abstract AS a1
-    //             INNER JOIN abstract AS a2 ON a1.tty_driver = a2.tty_driver
-    //             INNER JOIN abstract AS a3 ON a1.tty_driver = a3.tty_driver
-    //             INNER JOIN abstract AS a4 ON a1.tty_driver = a4.tty_driver
-    //     ) AS concrete
-    //     INNER JOIN Node AS n1 ON n1.ID = concrete.tty_driver
-    //     INNER JOIN Node AS n2 ON n2.ID = concrete.tty_client1
-    //     INNER JOIN Node AS n3 ON n3.ID = concrete.tty_client2
-    //     INNER JOIN Node AS n4 ON n4.ID = concrete.tty_client3
-    // "#).unwrap();
-    // let mut cursor = query.query(()).unwrap();
-    // loop {
-    //     let row = match cursor.next().unwrap() {
-    //         Some(row) => row,
-    //         None => break
-    //     };
-
-    //     println!("{:?}", row);
-    // }
 }

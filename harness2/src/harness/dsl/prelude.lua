@@ -40,6 +40,10 @@ function add_mapping(name, source, target, mapping)
     __mappings[name] = { source, target, mapping }
 end
 
+function add_query(query)
+    table.insert(__queries, query)
+end
+
 setmetatable(_G, {
     __index = function (t, k)
         return __task_model[k]

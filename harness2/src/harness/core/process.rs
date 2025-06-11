@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, env};
+use std::collections::BTreeMap;
 
 use crate::harness::core::state_machine::StateMachineMessageDestination;
 
