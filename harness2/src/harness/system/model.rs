@@ -1,17 +1,17 @@
-use crate::harness::{core::{error::HarnessError, process::ProcessSet, state_machine::StateMachineContext}, symbolic::symbolic_model::{HarnessSymbolicModel, HarnessModelSymbols}};
+use crate::harness::{core::{error::HarnessError, process::ProcessSet, state_machine::StateMachineContext}, system::symbolic_model::{SymbolicSystemModel, SystemModelSymbols}};
 
-pub struct HarnessModel {
+pub struct SystemModel {
     context: StateMachineContext,
     processes: ProcessSet,
-    symbols: HarnessModelSymbols
+    symbols: SystemModelSymbols
 }
 
-impl HarnessModel {
-    pub fn new(symbolic_model: &HarnessSymbolicModel) -> Result<HarnessModel, HarnessError> {
+impl SystemModel {
+    pub fn new(symbolic_model: &SymbolicSystemModel) -> Result<SystemModel, HarnessError> {
         let mut context = StateMachineContext::new();
         let mut processes = ProcessSet::new();
         let symbolic_build = symbolic_model.build(&mut context, &mut processes)?;
-        Ok(HarnessModel {
+        Ok(SystemModel {
             context,
             processes,
             symbols: symbolic_build
@@ -26,7 +26,7 @@ impl HarnessModel {
         &self.processes
     }
 
-    pub fn get_symbols(&self) -> &HarnessModelSymbols {
+    pub fn get_symbols(&self) -> &SystemModelSymbols {
         &self.symbols
     }
 }

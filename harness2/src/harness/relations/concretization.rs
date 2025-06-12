@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use crate::harness::{core::{error::HarnessError, reachability::{ProcessReachabilityPair, ProcessStateReachability}, state_machine::StateMachineNodeID}, relations::{db::Sqlite3ModelRelationsDb, error::Sqlite3RelationsDbError, model::Sqlite3ModelDatabase}, symbolic::model::HarnessModel};
+use crate::harness::{core::{error::HarnessError, reachability::{ProcessReachabilityPair, ProcessStateReachability}, state_machine::StateMachineNodeID}, harness::harness::HarnessConcretization, relations::{db::Sqlite3ModelRelationsDb, error::Sqlite3RelationsDbError, model::Sqlite3ModelDatabase}, system::model::SystemModel};
 
 pub struct HarnessModelConcretization<'a> {
-    abstract_models: HashMap<String, &'a HarnessModel>,
+    abstract_models: HashMap<String, &'a SystemModel>,
     mappings: HashMap<String, (String, String, HashMap<StateMachineNodeID, StateMachineNodeID>)>,
     queries: Vec<String>
 }
@@ -17,7 +17,22 @@ impl<'a> HarnessModelConcretization<'a> {
         }
     }
 
-    pub fn add_abstract_model<T: Into<String>>(&mut self, name: T, model: &'a HarnessModel) {
+    pub fn new_from(concretization: &'a HarnessConcretization) -> Result<HarnessModelConcretization<'a>, HarnessError> {
+        let mut concretizer = HarnessModelConcretization::new();
+        for (name, model) in concretization.get_abstract_models() {
+            concretizer.add_abstract_model(name, model);
+        }
+        for query in concretization.get_queries() {
+            concretizer.add_query(query);
+        }
+        for (name, mapping) in concretization.get_mappings() {
+            concretizer.add_mapping(name, mapping.get_source_model_name(), mapping.get_target_model_name(), mapping.get_mapping().clone());
+        }
+        
+        Ok(concretizer)
+    }
+
+    pub fn add_abstract_model<T: Into<String>>(&mut self, name: T, model: &'a SystemModel) {
         self.abstract_models.insert(name.into(), model);
     }
 
@@ -29,7 +44,7 @@ impl<'a> HarnessModelConcretization<'a> {
         self.queries.push(query.into());
     }
 
-    pub fn construct_reachability(&self, db: &rusqlite::Connection, concrete_model_name: &str, concretization_relation: &str, concrete_model: &'a HarnessModel) -> Result<ProcessStateReachability, Sqlite3RelationsDbError> {
+    pub fn construct_reachability(&self, db: &rusqlite::Connection, concrete_model_name: &str, concretization_relation: &str, concrete_model: &'a SystemModel) -> Result<ProcessStateReachability, Sqlite3RelationsDbError> {
         let relation_db = Sqlite3ModelRelationsDb::new(&db)?;
         let db_models = self.prepare_db_models(&relation_db, concretization_relation, concrete_model)?;
         self.prepare_mappings(db, &db_models)?;
@@ -70,7 +85,7 @@ impl<'a> HarnessModelConcretization<'a> {
         Ok(reachability)
     }
 
-    fn prepare_db_models(&self, relation_db: &Sqlite3ModelRelationsDb<'a>, concrete_model_name: &str, concrete_model: &'a HarnessModel) -> Result<HashMap<String, Sqlite3ModelDatabase<'a>>, Sqlite3RelationsDbError> {
+    fn prepare_db_models(&self, relation_db: &Sqlite3ModelRelationsDb<'a>, concrete_model_name: &str, concrete_model: &'a SystemModel) -> Result<HashMap<String, Sqlite3ModelDatabase<'a>>, Sqlite3RelationsDbError> {
         let mut db_models = HashMap::new();
         for (name, abstract_model) in &self.abstract_models {
             let state_space = abstract_model.get_processes().get_state_space(abstract_model.get_context())?;

@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use crate::harness::{codegen::template::CodegenTemplate, core::error::HarnessError};
-
-use super::symbolic_model::{HarnessModelSymbols, HarnessModelSymbol};
+use crate::harness::{codegen::template::CodegenTemplate, core::error::HarnessError, system::symbolic_model::{SystemModelSymbol, SystemModelSymbols}};
 
 struct HarnessProcessSymbolicTemplate {
     parameters: HashMap<String, String>,
@@ -14,8 +12,8 @@ struct HarnessActionTemplate {
 }
 
 pub struct HarnessSymbolicTemplate {
-    action_templates: HashMap<HarnessModelSymbol, HarnessActionTemplate>,
-    process_templates: HashMap<HarnessModelSymbol, HarnessProcessSymbolicTemplate>,
+    action_templates: HashMap<SystemModelSymbol, HarnessActionTemplate>,
+    process_templates: HashMap<SystemModelSymbol, HarnessProcessSymbolicTemplate>,
     global_prologue: Option<String>,
     executable: bool
 }
@@ -48,7 +46,7 @@ impl HarnessSymbolicTemplate {
         }
     }
 
-    pub fn append_process_prologue(&mut self, process: HarnessModelSymbol, prologue: String) -> Result<(), HarnessError> {
+    pub fn append_process_prologue(&mut self, process: SystemModelSymbol, prologue: String) -> Result<(), HarnessError> {
         let process_template = self.get_process_template_mut(process);
         match &mut process_template.prologue {
             Some(head) => {
@@ -60,17 +58,17 @@ impl HarnessSymbolicTemplate {
         Ok(())
     }
 
-    pub fn set_process_parameter(&mut self, process: HarnessModelSymbol, key: String, value: String) -> Result<(), HarnessError> {
+    pub fn set_process_parameter(&mut self, process: SystemModelSymbol, key: String, value: String) -> Result<(), HarnessError> {
         self.get_process_template_mut(process).parameters.insert(key, value);
         Ok(())
     }
 
-    pub fn set_action_content(&mut self, action: HarnessModelSymbol, content: String) -> Result<(), HarnessError> {
+    pub fn set_action_content(&mut self, action: SystemModelSymbol, content: String) -> Result<(), HarnessError> {
         self.get_action_template_mut(action).content = Some(content);
         Ok(())
     }
 
-    pub fn build(&self, build: &HarnessModelSymbols) -> Result<CodegenTemplate, HarnessError> {
+    pub fn build(&self, build: &SystemModelSymbols) -> Result<CodegenTemplate, HarnessError> {
         let mut template = CodegenTemplate::new();
 
         if let Some(prologue) = &self.global_prologue {
@@ -97,14 +95,14 @@ impl HarnessSymbolicTemplate {
         Ok(template)
     }
 
-    fn get_process_template_mut(&mut self, process: HarnessModelSymbol) -> &mut HarnessProcessSymbolicTemplate {
+    fn get_process_template_mut(&mut self, process: SystemModelSymbol) -> &mut HarnessProcessSymbolicTemplate {
         self.process_templates.entry(process).or_insert(HarnessProcessSymbolicTemplate {
             parameters: HashMap::new(),
             prologue: None
         })
     }
 
-    fn get_action_template_mut(&mut self, action: HarnessModelSymbol) -> &mut HarnessActionTemplate {
+    fn get_action_template_mut(&mut self, action: SystemModelSymbol) -> &mut HarnessActionTemplate {
         self.action_templates.entry(action).or_insert(HarnessActionTemplate { content: None })
     }
 }

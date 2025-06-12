@@ -1,23 +1,23 @@
 use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc, sync::Arc};
 
-use mlua::{AnyUserData, IntoLua};
+use mlua::IntoLua;
 
-use crate::harness::{core::{error::HarnessError, state_machine::StateMachineMessageEnvelopeBehavior}, symbolic::{harness::{SymbolicHarness, SymbolicHarnessConcretization, SymbolicHarnessMapping}, symbolic_model::{HarnessModelSymbol, HarnessSymbolicModel}, template::HarnessSymbolicTemplate}};
+use crate::harness::{core::{error::HarnessError, state_machine::StateMachineMessageEnvelopeBehavior}, dsl::{dsl::DSLInterpreter, lua::parser::LuaDSLParser}, harness::{symbolic_harness::{SymbolicHarness, SymbolicHarnessConcretization, SymbolicHarnessMapping}, template::HarnessSymbolicTemplate}, system::symbolic_model::{SymbolicSystemModel, SystemModelSymbol}};
 
-use super::parser::DSLFragment;
+use super::parser::LuaDSLFragment;
 
-pub struct DSLInterpreter {}
+pub struct LuaDSLInterpreter {}
 
 #[derive(Clone)]
 struct HarnessModelDSLSymbol {
     harness: HarnessModelDSLValue,
-    symbol: HarnessModelSymbol
+    symbol: SystemModelSymbol
 }
 
 #[derive(Clone)]
 struct HarnessModelDSLHandle {
-    context: HarnessSymbolicModel,
-    symbols: HashMap<String, HarnessModelSymbol>
+    context: SymbolicSystemModel,
+    symbols: HashMap<String, SystemModelSymbol>
 }
 
 #[derive(Clone)]
@@ -33,14 +33,14 @@ enum EnvelopeBehavior {
     ReplaceSame = 4
 }
 
-fn into_symbol(value: mlua::Value) -> mlua::Result<HarnessModelSymbol> {
+fn into_symbol(value: mlua::Value) -> mlua::Result<SystemModelSymbol> {
     Ok(value.as_userdata()
         .ok_or(mlua::Error::FromLuaConversionError { from: value.type_name(), to: "TemplateSymbolLuaValue".into(), message: None })?
         .borrow::<HarnessModelDSLSymbol>()?
         .symbol)
 }
 
-fn into_optional_symbol(value: mlua::Value) -> mlua::Result<Option<HarnessModelSymbol>> {
+fn into_optional_symbol(value: mlua::Value) -> mlua::Result<Option<SystemModelSymbol>> {
     if value.is_nil() {
         Ok(None)
     } else {
@@ -94,13 +94,13 @@ impl From<EnvelopeBehavior> for StateMachineMessageEnvelopeBehavior {
 }
 
 impl HarnessModelDSLSymbol {
-    pub fn new(harness: HarnessModelDSLValue, symbol: HarnessModelSymbol) -> HarnessModelDSLSymbol {
+    pub fn new(harness: HarnessModelDSLValue, symbol: SystemModelSymbol) -> HarnessModelDSLSymbol {
         HarnessModelDSLSymbol { harness, symbol }
     }
 }
 
 impl HarnessModelDSLHandle {
-    fn new(builder: HarnessSymbolicModel) -> HarnessModelDSLHandle {
+    fn new(builder: SymbolicSystemModel) -> HarnessModelDSLHandle {
         HarnessModelDSLHandle {
             context: builder,
             symbols: HashMap::new()
@@ -122,7 +122,7 @@ impl mlua::UserData for HarnessModelDSLSymbol {
             let destinations = destinations.as_table()
                 .ok_or(mlua::Error::FromLuaConversionError { from: destinations.type_name(), to: "[TemplateSymbolLuaValue]".into(), message: None })?
                 .pairs::<mlua::Value, mlua::Value>()
-                .map(| pair | -> Result<HarnessModelSymbol, mlua::Error> {
+                .map(| pair | -> Result<SystemModelSymbol, mlua::Error> {
                     let destination = into_symbol(pair?.1)?;
                     Ok(destination)
                 })
@@ -167,7 +167,7 @@ impl mlua::UserData for HarnessModelDSLSymbol {
             let other_processes = other_processes.as_table()
                 .ok_or(mlua::Error::FromLuaConversionError { from: other_processes.type_name(), to: "[TemplateSymbolLuaValue]".into(), message: None })?
                 .pairs::<mlua::Value, mlua::Value>()
-                .map(| pair | -> Result<HarnessModelSymbol, mlua::Error> {
+                .map(| pair | -> Result<SystemModelSymbol, mlua::Error> {
                     let destination = into_symbol(pair?.1)?;
                     Ok(destination)
                 })
@@ -185,7 +185,7 @@ impl mlua::UserData for HarnessModelDSLSymbol {
         methods.add_method("subnode", | _, this, structure: mlua::Table | {
             let structure = structure
                 .pairs::<mlua::Value, mlua::Value>()
-                .map(| pair | -> Result<HarnessModelSymbol, mlua::Error> {
+                .map(| pair | -> Result<SystemModelSymbol, mlua::Error> {
                     let symbol = into_symbol(pair?.1)?;
                     Ok(symbol)
                 })
@@ -263,14 +263,17 @@ impl mlua::UserData for HarnessModelDSLValue {
     }
 }
 
-impl DSLInterpreter {
-    pub fn new() -> Self {
-        Self {}
+impl DSLInterpreter for LuaDSLInterpreter {
+    type DSLUnit = Vec<LuaDSLFragment>;
+
+    fn parse<Input>(&self, input: &mut Input) -> Result<Self::DSLUnit, HarnessError>
+            where Input: Iterator<Item = Result<char, HarnessError>> {
+        LuaDSLParser::parse(input)
     }
 
-    pub fn interpret(&self, fragments: impl Iterator<Item = DSLFragment>, include_base_path: Option<PathBuf>) -> Result<SymbolicHarness, HarnessError> {
+    fn interpret(&self, fragments: &Self::DSLUnit, include_base_path: Option<PathBuf>) -> Result<SymbolicHarness, HarnessError> {
         let harness = HarnessModelDSLValue {
-            context: Rc::new(RefCell::new(HarnessModelDSLHandle::new(HarnessSymbolicModel::new()))),
+            context: Rc::new(RefCell::new(HarnessModelDSLHandle::new(SymbolicSystemModel::new()))),
             template: Rc::new(RefCell::new(HarnessSymbolicTemplate::new()))
         };
         let mut lua = mlua::Lua::new();
@@ -279,14 +282,14 @@ impl DSLInterpreter {
         lua.globals().set("__abstract_models", lua.create_table()?)?;
         lua.globals().set("__mappings", lua.create_table()?)?;
         lua.globals().set("__queries", lua.create_table()?)?;
-        Self::interpret_template(fragments, &harness.template, &mut lua)?;
+        Self::interpret_template(fragments.iter(), &harness.template, &mut lua)?;
 
         let abstract_models_table = lua.globals().get::<mlua::Table>("__abstract_models")?;
         let mut abstract_models = HashMap::new();
         for pair in abstract_models_table.pairs::<String, mlua::AnyUserData>() {
             let (model_name, model) = pair?;
             let model = model.borrow_mut::<HarnessModelDSLValue>()?;
-            let model = model.context.replace(HarnessModelDSLHandle::new(HarnessSymbolicModel::new())).context;
+            let model = model.context.replace(HarnessModelDSLHandle::new(SymbolicSystemModel::new())).context;
             abstract_models.insert(model_name, model);
         }
 
@@ -317,10 +320,10 @@ impl DSLInterpreter {
 
         let concretization = lua.globals().get::<Option<String>>("__concretization")?;
 
-        let model: AnyUserData = lua.globals().get("__task_model")?;
+        let model: mlua::AnyUserData = lua.globals().get("__task_model")?;
         let model = model.borrow_mut::<HarnessModelDSLValue>()?;
         let template = model.template.replace(HarnessSymbolicTemplate::new());
-        let model = model.context.replace(HarnessModelDSLHandle::new(HarnessSymbolicModel::new())).context;
+        let model = model.context.replace(HarnessModelDSLHandle::new(SymbolicSystemModel::new())).context;
 
         let mut symbolic_harness = SymbolicHarness::new("concrete", model, template);
         if let Some(concretization_relation) = concretization {
@@ -346,6 +349,12 @@ impl DSLInterpreter {
 
         Ok(symbolic_harness)
     }
+}
+
+impl LuaDSLInterpreter {
+    pub fn new() -> Self {
+        Self {}
+    }
 
     fn initialize(template: Rc<RefCell<HarnessSymbolicTemplate>>, lua: &mut mlua::Lua, include_base_path: Option<PathBuf>) -> Result<(), HarnessError> {
         {
@@ -366,7 +375,7 @@ impl DSLInterpreter {
         {
             let new_task_model_fn = lua.create_function(move | _, () | {
                 let context = HarnessModelDSLValue {
-                    context: Rc::new(RefCell::new(HarnessModelDSLHandle::new(HarnessSymbolicModel::new()))),
+                    context: Rc::new(RefCell::new(HarnessModelDSLHandle::new(SymbolicSystemModel::new()))),
                     template: template.clone()
                 };
                 Ok(context)
@@ -384,13 +393,13 @@ impl DSLInterpreter {
         Ok(())
     }
 
-    fn interpret_template(fragments: impl Iterator<Item = DSLFragment>, template: &RefCell<HarnessSymbolicTemplate>, lua: &mut mlua::Lua) -> Result<(), HarnessError> {
+    fn interpret_template<'a>(fragments: impl Iterator<Item = &'a LuaDSLFragment>, template: &RefCell<HarnessSymbolicTemplate>, lua: &mut mlua::Lua) -> Result<(), HarnessError> {
         for fragment in fragments {
             match fragment {
-                DSLFragment::Verbatim(content) =>
-                    template.borrow_mut().append_global_prologue(content),
+                LuaDSLFragment::Verbatim(content) =>
+                    template.borrow_mut().append_global_prologue(content.into()),
 
-                DSLFragment::Interpreted(code) =>
+                LuaDSLFragment::Interpreted(code) =>
                     lua.load(code).exec()?
             }
         }

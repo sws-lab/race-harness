@@ -1,19 +1,19 @@
 use crate::harness::core::error::HarnessError;
 
 #[derive(Debug)]
-pub enum DSLFragment {
+pub enum LuaDSLFragment {
     Verbatim(String),
     Interpreted(String)
 }
 
-struct DSLScanner<'a, Input: Iterator<Item = Result<char, HarnessError>>> {
+struct LuaDSLScanner<'a, Input: Iterator<Item = Result<char, HarnessError>>> {
     input: &'a mut Input,
     location: (u64, u64),
     lookahead: [Option<char>; 2]
 }
 
-pub struct DSLParser<'a, Input: Iterator<Item = Result<char, HarnessError>>> {
-    scanner: DSLScanner<'a, Input>
+pub struct LuaDSLParser<'a, Input: Iterator<Item = Result<char, HarnessError>>> {
+    scanner: LuaDSLScanner<'a, Input>
 }
 
 enum ControlFlowBlock {
@@ -28,9 +28,9 @@ enum ControlFlowBlock {
     Bracket
 }
 
-impl<'a, Input: Iterator<Item = Result<char, HarnessError>>> DSLScanner<'a, Input> {
-    fn new(input: &'a mut Input) -> Result<DSLScanner<'a, Input>, HarnessError> {
-        let mut scanner = DSLScanner {
+impl<'a, Input: Iterator<Item = Result<char, HarnessError>>> LuaDSLScanner<'a, Input> {
+    fn new(input: &'a mut Input) -> Result<LuaDSLScanner<'a, Input>, HarnessError> {
+        let mut scanner = LuaDSLScanner {
             input,
             location: (1, 1),
             lookahead: [None, None]
@@ -88,16 +88,16 @@ impl<'a, Input: Iterator<Item = Result<char, HarnessError>>> DSLScanner<'a, Inpu
     }
 }
 
-impl<'a, Input: Iterator<Item = Result<char, HarnessError>>> DSLParser<'a, Input> {
-    fn new(input: &'a mut Input) -> Result<DSLParser<'a, Input>, HarnessError> {
-        let scanner = DSLScanner::new(input)?;
-        Ok(DSLParser {
+impl<'a, Input: Iterator<Item = Result<char, HarnessError>>> LuaDSLParser<'a, Input> {
+    fn new(input: &'a mut Input) -> Result<LuaDSLParser<'a, Input>, HarnessError> {
+        let scanner = LuaDSLScanner::new(input)?;
+        Ok(LuaDSLParser {
             scanner
         })
     }
 
-    pub fn parse(input: &'a mut Input) -> Result<Vec<DSLFragment>, HarnessError> {
-        let mut parser = DSLParser::new(input)?;
+    pub fn parse(input: &'a mut Input) -> Result<Vec<LuaDSLFragment>, HarnessError> {
+        let mut parser = LuaDSLParser::new(input)?;
         let mut fragments = Vec::new();
         while let Some(fragment) = parser.next_fragment()? {
             fragments.push(fragment);
@@ -105,7 +105,7 @@ impl<'a, Input: Iterator<Item = Result<char, HarnessError>>> DSLParser<'a, Input
         Ok(fragments)
     }
 
-    fn next_fragment(&mut self) -> Result<Option<DSLFragment>, HarnessError> {
+    fn next_fragment(&mut self) -> Result<Option<LuaDSLFragment>, HarnessError> {
         match self.scanner.lookahead(0) {
             Some('@') => {
                 self.scanner.next()?;
@@ -116,7 +116,7 @@ impl<'a, Input: Iterator<Item = Result<char, HarnessError>>> DSLParser<'a, Input
         }
     }
 
-    fn next_verbatim_fragment(&mut self) -> Result<DSLFragment, HarnessError> {
+    fn next_verbatim_fragment(&mut self) -> Result<LuaDSLFragment, HarnessError> {
         let mut content = String::new();
         loop {
             match self.scanner.lookahead(0) {
@@ -131,10 +131,10 @@ impl<'a, Input: Iterator<Item = Result<char, HarnessError>>> DSLParser<'a, Input
             }
         }
 
-        Ok(DSLFragment::Verbatim(content))
+        Ok(LuaDSLFragment::Verbatim(content))
     }
 
-    fn next_interpreted_fragment(&mut self) -> Result<DSLFragment, HarnessError> {
+    fn next_interpreted_fragment(&mut self) -> Result<LuaDSLFragment, HarnessError> {
         let mut content = String::new();
         let mut raw_string_mode = None;
         let mut control_flow = Vec::new();
@@ -283,6 +283,6 @@ impl<'a, Input: Iterator<Item = Result<char, HarnessError>>> DSLParser<'a, Input
             }
         }
 
-        Ok(DSLFragment::Interpreted(content))
+        Ok(LuaDSLFragment::Interpreted(content))
     }
 }
