@@ -1,19 +1,19 @@
 use crate::harness::core::error::HarnessError;
 
 #[derive(Debug)]
-pub enum TemplateFragment {
+pub enum DSLFragment {
     Verbatim(String),
     Interpreted(String)
 }
 
-struct TemplateScanner<'a, Input: Iterator<Item = Result<char, HarnessError>>> {
+struct DSLScanner<'a, Input: Iterator<Item = Result<char, HarnessError>>> {
     input: &'a mut Input,
     location: (u64, u64),
     lookahead: [Option<char>; 2]
 }
 
-pub struct TemplateParser<'a, Input: Iterator<Item = Result<char, HarnessError>>> {
-    scanner: TemplateScanner<'a, Input>
+pub struct DSLParser<'a, Input: Iterator<Item = Result<char, HarnessError>>> {
+    scanner: DSLScanner<'a, Input>
 }
 
 enum ControlFlowBlock {
@@ -28,9 +28,9 @@ enum ControlFlowBlock {
     Bracket
 }
 
-impl<'a, Input: Iterator<Item = Result<char, HarnessError>>> TemplateScanner<'a, Input> {
-    fn new(input: &'a mut Input) -> Result<TemplateScanner<'a, Input>, HarnessError> {
-        let mut scanner = TemplateScanner {
+impl<'a, Input: Iterator<Item = Result<char, HarnessError>>> DSLScanner<'a, Input> {
+    fn new(input: &'a mut Input) -> Result<DSLScanner<'a, Input>, HarnessError> {
+        let mut scanner = DSLScanner {
             input,
             location: (1, 1),
             lookahead: [None, None]
@@ -88,16 +88,16 @@ impl<'a, Input: Iterator<Item = Result<char, HarnessError>>> TemplateScanner<'a,
     }
 }
 
-impl<'a, Input: Iterator<Item = Result<char, HarnessError>>> TemplateParser<'a, Input> {
-    fn new(input: &'a mut Input) -> Result<TemplateParser<'a, Input>, HarnessError> {
-        let scanner = TemplateScanner::new(input)?;
-        Ok(TemplateParser {
+impl<'a, Input: Iterator<Item = Result<char, HarnessError>>> DSLParser<'a, Input> {
+    fn new(input: &'a mut Input) -> Result<DSLParser<'a, Input>, HarnessError> {
+        let scanner = DSLScanner::new(input)?;
+        Ok(DSLParser {
             scanner
         })
     }
 
-    pub fn parse(input: &'a mut Input) -> Result<Vec<TemplateFragment>, HarnessError> {
-        let mut parser = TemplateParser::new(input)?;
+    pub fn parse(input: &'a mut Input) -> Result<Vec<DSLFragment>, HarnessError> {
+        let mut parser = DSLParser::new(input)?;
         let mut fragments = Vec::new();
         while let Some(fragment) = parser.next_fragment()? {
             fragments.push(fragment);
@@ -105,7 +105,7 @@ impl<'a, Input: Iterator<Item = Result<char, HarnessError>>> TemplateParser<'a, 
         Ok(fragments)
     }
 
-    fn next_fragment(&mut self) -> Result<Option<TemplateFragment>, HarnessError> {
+    fn next_fragment(&mut self) -> Result<Option<DSLFragment>, HarnessError> {
         match self.scanner.lookahead(0) {
             Some('@') => {
                 self.scanner.next()?;
@@ -116,7 +116,7 @@ impl<'a, Input: Iterator<Item = Result<char, HarnessError>>> TemplateParser<'a, 
         }
     }
 
-    fn next_verbatim_fragment(&mut self) -> Result<TemplateFragment, HarnessError> {
+    fn next_verbatim_fragment(&mut self) -> Result<DSLFragment, HarnessError> {
         let mut content = String::new();
         loop {
             match self.scanner.lookahead(0) {
@@ -131,10 +131,10 @@ impl<'a, Input: Iterator<Item = Result<char, HarnessError>>> TemplateParser<'a, 
             }
         }
 
-        Ok(TemplateFragment::Verbatim(content))
+        Ok(DSLFragment::Verbatim(content))
     }
 
-    fn next_interpreted_fragment(&mut self) -> Result<TemplateFragment, HarnessError> {
+    fn next_interpreted_fragment(&mut self) -> Result<DSLFragment, HarnessError> {
         let mut content = String::new();
         let mut raw_string_mode = None;
         let mut control_flow = Vec::new();
@@ -283,6 +283,6 @@ impl<'a, Input: Iterator<Item = Result<char, HarnessError>>> TemplateParser<'a, 
             }
         }
 
-        Ok(TemplateFragment::Interpreted(content))
+        Ok(DSLFragment::Interpreted(content))
     }
 }
