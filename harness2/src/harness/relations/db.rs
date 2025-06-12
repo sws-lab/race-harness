@@ -1,14 +1,18 @@
-use crate::harness::{core::{process::ProcessSet, state_machine::StateMachineContext}, relations::{error::Sqlite3RelationsDbError, model::Sqlite3Model}};
+use crate::harness::{core::{process::ProcessSet, state_machine::StateMachineContext}, relations::{error::Sqlite3RelationsDbError, model::Sqlite3ModelDatabase}};
 
-pub struct Sqlite3RelationsDb<'a> {
+pub struct Sqlite3ModelRelationsDb<'a> {
     connection: &'a rusqlite::Connection
 }
 
-impl<'a> Sqlite3RelationsDb<'a> {
-    pub fn new(connection: &'a rusqlite::Connection) -> Result<Sqlite3RelationsDb<'a>, Sqlite3RelationsDbError> {
-        let db = Sqlite3RelationsDb { connection };
+impl<'a> Sqlite3ModelRelationsDb<'a> {
+    pub fn new(connection: &'a rusqlite::Connection) -> Result<Sqlite3ModelRelationsDb<'a>, Sqlite3RelationsDbError> {
+        let db = Sqlite3ModelRelationsDb { connection };
         db.initialize_schema()?;
         Ok(db)
+    }
+
+    pub fn new_model<'b: 'a, T: Into<String>>(&self, processes: &'b ProcessSet, context: &'b StateMachineContext, name: T) -> Result<Sqlite3ModelDatabase<'a>, Sqlite3RelationsDbError> {
+        Sqlite3ModelDatabase::new(self.connection, processes, context, name.into())
     }
 
     fn initialize_schema(&self) -> Result<(), rusqlite::Error> {
@@ -67,9 +71,5 @@ impl<'a> Sqlite3RelationsDb<'a> {
         "#, ())?;
 
         Ok(())
-    }
-
-    pub fn new_model<'b: 'a, T: Into<String>>(&self, processes: &'b ProcessSet, context: &'b StateMachineContext, name: T) -> Result<Sqlite3Model<'a>, Sqlite3RelationsDbError> {
-        Sqlite3Model::new(self.connection, processes, context, name.into())
     }
 }

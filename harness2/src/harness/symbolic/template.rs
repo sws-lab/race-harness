@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::harness::{codegen::template::CodegenTemplate, core::error::HarnessError};
 
-use super::symbolic_model::{HarnessSymbolicModelBuild, HarnessModelSymbol};
+use super::symbolic_model::{HarnessModelSymbols, HarnessModelSymbol};
 
 struct HarnessProcessSymbolicTemplate {
     parameters: HashMap<String, String>,
@@ -70,7 +70,7 @@ impl HarnessSymbolicTemplate {
         Ok(())
     }
 
-    pub fn build(&self, build: &HarnessSymbolicModelBuild) -> Result<CodegenTemplate, HarnessError> {
+    pub fn build(&self, build: &HarnessModelSymbols) -> Result<CodegenTemplate, HarnessError> {
         let mut template = CodegenTemplate::new();
 
         if let Some(prologue) = &self.global_prologue {

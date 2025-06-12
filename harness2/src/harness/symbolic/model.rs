@@ -1,9 +1,9 @@
-use crate::harness::{core::{error::HarnessError, process::ProcessSet, state_machine::StateMachineContext}, frontend::symbolic_model::{HarnessSymbolicModel, HarnessSymbolicModelBuild}};
+use crate::harness::{core::{error::HarnessError, process::ProcessSet, state_machine::StateMachineContext}, symbolic::symbolic_model::{HarnessSymbolicModel, HarnessModelSymbols}};
 
 pub struct HarnessModel {
     context: StateMachineContext,
     processes: ProcessSet,
-    symbolic_build: HarnessSymbolicModelBuild
+    symbols: HarnessModelSymbols
 }
 
 impl HarnessModel {
@@ -14,7 +14,7 @@ impl HarnessModel {
         Ok(HarnessModel {
             context,
             processes,
-            symbolic_build
+            symbols: symbolic_build
         })
     }
 
@@ -26,7 +26,7 @@ impl HarnessModel {
         &self.processes
     }
 
-    pub fn get_symbolic_model_build(&self) -> &HarnessSymbolicModelBuild {
-        &self.symbolic_build
+    pub fn get_symbols(&self) -> &HarnessModelSymbols {
+        &self.symbols
     }
 }

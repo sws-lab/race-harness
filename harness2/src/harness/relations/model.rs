@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use crate::harness::{core::{error::HarnessError, process::{ProcessID, ProcessSet}, process_state::ProcessSetStateSpace, state_machine::{StateMachineContext, StateMachineNodeID}}, relations::{error::Sqlite3RelationsDbError, state_space::Sqlite3StateSpace}};
+use crate::harness::{core::{error::HarnessError, process::{ProcessID, ProcessSet}, process_state::ProcessSetStateSpace, state_machine::{StateMachineContext, StateMachineNodeID}}, relations::{error::Sqlite3RelationsDbError, state_space::Sqlite3StateSpaceDatabase}};
 
-pub struct Sqlite3Model<'a> {
+pub struct Sqlite3ModelDatabase<'a> {
     connection: &'a rusqlite::Connection,
     processes: &'a ProcessSet,
     harness_db_id: i64,
@@ -11,8 +11,8 @@ pub struct Sqlite3Model<'a> {
     reverse_node_db_ids: HashMap<i64, StateMachineNodeID>
 }
 
-impl<'a> Sqlite3Model<'a> {
-    pub fn new(connection: &'a rusqlite::Connection, processes: &'a ProcessSet, context: &'a StateMachineContext, name: String) -> Result<Sqlite3Model<'a>, Sqlite3RelationsDbError> {
+impl<'a> Sqlite3ModelDatabase<'a> {
+    pub fn new(connection: &'a rusqlite::Connection, processes: &'a ProcessSet, context: &'a StateMachineContext, name: String) -> Result<Sqlite3ModelDatabase<'a>, Sqlite3RelationsDbError> {
         let mut harness_query = connection.prepare(r#"
             INSERT INTO Model (Name) VALUES (?) RETURNING ID
         "#)?;
@@ -52,7 +52,7 @@ impl<'a> Sqlite3Model<'a> {
             reverse_node_db_ids.insert(node_id, node);
         }
 
-        let model = Sqlite3Model {
+        let model = Sqlite3ModelDatabase {
             connection,
             processes,
             harness_db_id,
@@ -63,8 +63,8 @@ impl<'a> Sqlite3Model<'a> {
         Ok(model)
     }
 
-    pub fn new_state_space<T: Into<String>>(&self, state_space: &ProcessSetStateSpace, name: T) -> Result<Sqlite3StateSpace, Sqlite3RelationsDbError> {
-        Sqlite3StateSpace::new(self.connection, self, state_space, name.into())
+    pub fn new_state_space(&self, state_space: &ProcessSetStateSpace, name: &str) -> Result<Sqlite3StateSpaceDatabase, Sqlite3RelationsDbError> {
+        Sqlite3StateSpaceDatabase::new(self.connection, self, state_space, name)
     }
 
     pub fn get_processes(&self) -> &'a ProcessSet {
@@ -87,7 +87,7 @@ impl<'a> Sqlite3Model<'a> {
         self.reverse_node_db_ids.get(&node_db_id).map(| x | *x)
     }
 
-    pub fn materialize(&self, name: &str) -> Result<(), Sqlite3RelationsDbError> {
+    pub fn materialize_into(&self, name: &str) -> Result<(), Sqlite3RelationsDbError> {
         // UGLY, UNSAFE and BAD, but nonetheless
         let mut sql_query = String::from("CREATE TABLE ");
         sql_query.push_str(name);

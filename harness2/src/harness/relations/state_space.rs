@@ -1,9 +1,9 @@
-use crate::harness::{core::{error::HarnessError, process_state::ProcessSetStateSpace}, relations::{error::Sqlite3RelationsDbError, model::Sqlite3Model}};
+use crate::harness::{core::{error::HarnessError, process_state::ProcessSetStateSpace}, relations::{error::Sqlite3RelationsDbError, model::Sqlite3ModelDatabase}};
 
-pub struct Sqlite3StateSpace {}
+pub struct Sqlite3StateSpaceDatabase {}
 
-impl<'a> Sqlite3StateSpace {
-    pub fn new(connection: &'a rusqlite::Connection, model: &'a Sqlite3Model<'a>, state_space: &ProcessSetStateSpace, name: String) -> Result<Sqlite3StateSpace, Sqlite3RelationsDbError> {
+impl<'a> Sqlite3StateSpaceDatabase {
+    pub fn new(connection: &'a rusqlite::Connection, model: &'a Sqlite3ModelDatabase<'a>, state_space: &ProcessSetStateSpace, name: &str) -> Result<Sqlite3StateSpaceDatabase, Sqlite3RelationsDbError> {
         let mut space_insert_query = connection.prepare(r#"
             INSERT INTO Space (Name, ModelID) VALUES (?, ?) RETURNING ID
         "#)?;
@@ -14,7 +14,7 @@ impl<'a> Sqlite3StateSpace {
             INSERT INTO ProcessState (SpaceStateID, ProcessID, NodeID) VALUES (?, ?, ?)
         "#)?;
 
-        let space_db_id: i64 = space_insert_query.query((name.as_str(), model.get_harness_db_id()))?
+        let space_db_id: i64 = space_insert_query.query((name, model.get_harness_db_id()))?
             .next()?
             .expect("Expected state space identifier to exist")
             .get(0)?;
@@ -37,7 +37,7 @@ impl<'a> Sqlite3StateSpace {
             }
         }
 
-        let db_space = Sqlite3StateSpace {};
+        let db_space = Sqlite3StateSpaceDatabase {};
     
         Ok(db_space)
     }

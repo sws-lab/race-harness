@@ -2,7 +2,7 @@ use std::{collections::{BTreeMap, HashMap}, io::Read, path::Path};
 
 use harness::{codegen::{codegen::ControlFlowCodegen, executable::ControlFlowExecutableCodegen, goblint::ControlFlowGoblintCodegen, output::WriteCodegenOutput}, control_flow::{builder::ControlFlowBuilder, mutex::ControlFlowMutexSet}, core::{error::HarnessError, mutex::mutex::ProcessSetMutualExclusion}, dsl::{parser::TemplateParser}};
 
-use crate::harness::{dsl::lua::InterpretedLuaModelTemplate, frontend::model::HarnessModel, relations::concretization::HarnessModelConcretization};
+use crate::harness::{dsl::lua::InterpretedLuaModelTemplate, symbolic::model::HarnessModel, relations::concretization::HarnessModelConcretization};
 
 pub mod harness;
 
@@ -15,7 +15,7 @@ fn main() {
     let template = TemplateParser::parse(&mut harness_code.chars().map(| x | Ok(x))).unwrap();
     let template_models = InterpretedLuaModelTemplate::new(template.into_iter(), Some(harness_filepath.parent().unwrap().into())).unwrap();
     let concrete_model = HarnessModel::new(&template_models.get_concrete_model()).unwrap();
-    let codegen_template = template_models.get_template().build(concrete_model.get_symbolic_model_build()).unwrap();
+    let codegen_template = template_models.get_template().build(concrete_model.get_symbols()).unwrap();
 
     let reachability = match &template_models.get_concretization() {
         Some(concretization) => {
@@ -25,14 +25,14 @@ fn main() {
                 abstract_models.insert(name, model);
             }
 
-            let mut concretizer = HarnessModelConcretization::new(&concrete_model);
+            let mut concretizer = HarnessModelConcretization::new();
             for (&name, abstract_model) in &abstract_models {
                 concretizer.add_abstract_model(name, abstract_model);
             }
             for (name, mapping) in template_models.get_mappings() {
                 let source_model = abstract_models.get(mapping.get_source_model_name()).unwrap();
-                let target_model = &concrete_model; // abstract_models.get(mapping.get_target_model_name()).unwrap();
-                let mapping_build = mapping.build(source_model.get_symbolic_model_build(), target_model.get_symbolic_model_build()).unwrap();
+                let target_model = &concrete_model;
+                let mapping_build = mapping.build(source_model.get_symbols(), target_model.get_symbols()).unwrap();
                 concretizer.add_mapping(name, mapping.get_source_model_name(), mapping.get_target_model_name(), mapping_build);
             }
             for query in template_models.get_queries() {
@@ -44,7 +44,7 @@ fn main() {
             } else {
                 rusqlite::Connection::open_in_memory().unwrap()
             };
-            concretizer.construct_reachability(&db, concretization).unwrap()
+            concretizer.construct_reachability(&db, "concrete", concretization, &concrete_model).unwrap()
         },
         None => concrete_model.get_processes().get_state_space(concrete_model.get_context()).unwrap().derive_reachability()
     };

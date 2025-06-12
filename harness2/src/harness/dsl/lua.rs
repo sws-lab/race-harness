@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc, sync::Arc}
 
 use mlua::{AnyUserData, IntoLua};
 
-use crate::harness::{core::{error::HarnessError, state_machine::{StateMachineMessageEnvelopeBehavior, StateMachineNodeID}}, frontend::{symbolic_model::{HarnessModelSymbol, HarnessSymbolicModel, HarnessSymbolicModelBuild}, template::HarnessSymbolicTemplate}};
+use crate::harness::{core::{error::HarnessError, state_machine::{StateMachineMessageEnvelopeBehavior, StateMachineNodeID}}, symbolic::{symbolic_model::{HarnessModelSymbol, HarnessSymbolicModel, HarnessModelSymbols}, template::HarnessSymbolicTemplate}};
 
 use super::parser::TemplateFragment;
 
@@ -289,7 +289,7 @@ impl HarnessSymbolicModelMapping {
         &self.mapping
     }
 
-    pub fn build(&self, source_build: &HarnessSymbolicModelBuild, target_build: &HarnessSymbolicModelBuild) -> Result<HashMap<StateMachineNodeID, StateMachineNodeID>, HarnessError> {
+    pub fn build(&self, source_build: &HarnessModelSymbols, target_build: &HarnessModelSymbols) -> Result<HashMap<StateMachineNodeID, StateMachineNodeID>, HarnessError> {
         self.mapping.iter()
             .map(| (source_symbol, target_symbol) | {
                 let source = source_build.get_state(*source_symbol)
