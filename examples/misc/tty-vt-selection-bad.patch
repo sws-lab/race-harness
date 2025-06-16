@@ -1,0 +1,63 @@
+--- /home/jprotopopov/kernel/linux-6.14.9/drivers/tty/vt/selection.c	2025-06-16 13:33:57.439977581 +0300
++++ /home/jprotopopov/selection_bad.c	2025-06-16 13:33:48.535977615 +0300
+@@ -16,7 +16,6 @@
+ #include <linux/tty.h>
+ #include <linux/sched.h>
+ #include <linux/mm.h>
+-#include <linux/mutex.h>
+ #include <linux/slab.h>
+ #include <linux/types.h>
+ 
+@@ -37,14 +36,12 @@
+ 
+ /* FIXME: all this needs locking */
+ static struct vc_selection {
+-	struct mutex lock;
+ 	struct vc_data *cons;			/* must not be deallocated */
+ 	char *buffer;
+ 	unsigned int buf_len;
+ 	volatile int start;			/* cleared by clear_selection */
+ 	int end;
+ } vc_sel = {
+-	.lock = __MUTEX_INITIALIZER(vc_sel.lock),
+ 	.start = -1,
+ };
+ 
+@@ -377,11 +374,9 @@
+ {
+ 	int ret;
+ 
+-	mutex_lock(&vc_sel.lock);
+ 	console_lock();
+ 	ret = vc_selection(vc_cons[fg_console].d, v, tty);
+ 	console_unlock();
+-	mutex_unlock(&vc_sel.lock);
+ 
+ 	return ret;
+ }
+@@ -413,7 +408,6 @@
+ 	tty_buffer_lock_exclusive(&vc->port);
+ 
+ 	add_wait_queue(&vc->paste_wait, &wait);
+-	mutex_lock(&vc_sel.lock);
+ 	while (vc_sel.buffer && vc_sel.buf_len > pasted) {
+ 		set_current_state(TASK_INTERRUPTIBLE);
+ 		if (signal_pending(current)) {
+@@ -421,9 +415,7 @@
+ 			break;
+ 		}
+ 		if (tty_throttled(tty)) {
+-			mutex_unlock(&vc_sel.lock);
+ 			schedule();
+-			mutex_lock(&vc_sel.lock);
+ 			continue;
+ 		}
+ 		__set_current_state(TASK_RUNNING);
+@@ -432,7 +424,6 @@
+ 					      count);
+ 		pasted += count;
+ 	}
+-	mutex_unlock(&vc_sel.lock);
+ 	remove_wait_queue(&vc->paste_wait, &wait);
+ 	__set_current_state(TASK_RUNNING);
+ 
