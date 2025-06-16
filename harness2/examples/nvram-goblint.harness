@@ -1,22 +1,24 @@
-#include "linux/compiler_types.h"
 #include "linux/kconfig.h"
+#include "linux/compiler_types.h"
 #include "asm/orc_header.h"
 #include "linux/build-salt.h"
-#include "linux/console.h"
-#include "linux/device.h"
 #include "linux/elfnote-lto.h"
 #include "linux/export-internal.h"
 #include "linux/module.h"
-#include "linux/serial.h"
-#include "linux/tty.h"
+#include "linux/nvram.h"
+#include "linux/miscdevice.h"
+#include "linux/mc146818rtc.h"
+#include "linux/proc_fs.h"
+#include "linux/io.h"
+#include "linux/pagemap.h"
 
-extern struct tty_driver *registered_tty_driver;
+extern struct miscdevice *registered_miscdevice;
 
 @include('char-dev-generic.lua')
 
 @for _, char_dev_client in pairs(char_dev_clients) do
     char_dev_client:setup([[
-        struct tty_struct tty;
+        struct inode inode;
         struct file file;
         const char content[] = "client%client_id%";
     ]])
@@ -29,11 +31,16 @@ end
     cleanup_module();
 ]])
 @char_dev_client_acquire_connection_action:exec([[
-    registered_tty_driver->ops->open(&tty, &file);
+    registered_miscdevice->fops->open(&inode, &file);
 ]])
 @char_dev_client_disconnect_action:exec([[
-    registered_tty_driver->ops->close(&tty, &file);
+    registered_miscdevice->fops->release(&inode, &file);
 ]])
 @char_dev_client_use_connection_action:exec([[
-    registered_tty_driver->ops->write(&tty, content, sizeof(content));
+    loff_t pos;
+    registered_miscdevice->fops->write(&file, content, sizeof(content), &pos);
+]])
+@char_dev_client_use2_connection_action:exec([[
+    loff_t pos;
+    registered_miscdevice->fops->read(&file, content, sizeof(content), &pos);
 ]])

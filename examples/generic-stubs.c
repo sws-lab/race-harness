@@ -75,3 +75,58 @@ int _printk(const char *fmt, ...) {
 	X++;
 	return 0;
 }
+
+// __bad_copy_from [include/linux/thread_info.h line 237 column 1]
+void __bad_copy_from(void) {
+	__goblint_assert(0);
+}
+
+// __bad_copy_to [include/linux/thread_info.h line 239 column 1]
+void __bad_copy_to(void) {
+	__goblint_assert(0);
+}
+
+// __check_object_size [include/linux/thread_info.h line 221 column 13]
+void __check_object_size(const void *ptr, unsigned long n, bool to_user) {}
+
+// __copy_overflow [include/linux/thread_info.h line 241 column 6]
+void __copy_overflow(int size, unsigned long count) {}
+
+// __kmalloc_cache_noprof [include/linux/slab.h line 824 column 7]
+void *__kmalloc_cache_noprof(struct kmem_cache *s, gfp_t flags, size_t size) {
+	return __kmalloc(size, flags);
+}
+
+// __kmalloc_large_noprof [include/linux/slab.h line 831 column 7]
+void *__kmalloc_large_noprof(size_t size, gfp_t flags) {
+	return __kmalloc(size, flags);
+}
+
+// __kmalloc_noprof [include/linux/slab.h line 818 column 7]
+void *__kmalloc_noprof(size_t size, gfp_t flags) {
+	return __kmalloc(size, flags);
+}
+
+void kfree(const void *ptr) {}
+
+// _copy_to_user [include/linux/uaccess.h line 202 column 1]
+unsigned long _copy_to_user(void *ptr, const void *src, unsigned long len) {}
+
+// capable [include/linux/capability.h line 148 column 13]
+bool capable(int cap) {
+	return 1;
+}
+
+// memdup_user [include/linux/string.h line 18 column 14]
+void *memdup_user(const void *ptr, size_t size) {}
+
+// seq_printf [include/linux/seq_file.h line 118 column 6]
+void seq_printf(struct seq_file *m, const char *fmt, ...) {}
+
+void _raw_spin_unlock_irq(raw_spinlock_t *lock) {
+	_raw_spin_unlock_irqrestore(lock, 0);
+}
+
+void _raw_spin_unlock(raw_spinlock_t *lock) {
+	_raw_spin_unlock_irqrestore(lock, 0);
+}

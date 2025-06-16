@@ -10,31 +10,31 @@ struct S1 {
 static struct S1 *s1_ptr;
 
 @executable(true)
-@include('ttyprintk-generic.lua')
+@include('char-dev-generic.lua')
 
-@tty_driver:setup([[
+@char_dev_driver:setup([[
     static struct S1 s1 = {0};
 ]])
 
-@tty_driver_load_action:exec([[
+@char_dev_driver_load_action:exec([[
     s1_ptr = &s1;
     s1_ptr->connections = 0;
     s1_ptr->value = 0;
     printf("Driver loaded\n");
 ]])
-@tty_driver_unloaded_action:exec([[
+@char_dev_driver_unloaded_action:exec([[
     printf("Driver unloaded\n");
     s1_ptr = NULL;
 ]])
-@tty_client_acquire_connection_action:exec([[
+@char_dev_client_acquire_connection_action:exec([[
     s1_ptr->connections++;
     printf("Client %client_id% connected\n");
 ]])
-@tty_client_disconnect_action:exec([[
+@char_dev_client_disconnect_action:exec([[
     s1_ptr->connections--;
     printf("Client %client_id% disconnected\n");
 ]])
-@tty_client_use_connection_action:exec([[
+@char_dev_client_use_connection_action:exec([[
     s1_ptr->value++;
     printf("Client %client_id% active\n");
 ]])
