@@ -1,0 +1,11 @@
+{
+    "kernel_inputs": [
+        "drivers/char/lp.ko"
+    ],
+    "stubs": [
+        "generic-stubs.c",
+        "lp-stubs.c"
+    ],
+    "harness": "../harness2/examples/lp.harness",
+    "goblint_conf": ["common.json"]
+}
