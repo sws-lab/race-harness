@@ -1,0 +1,11 @@
+{
+    "kernel_inputs": [
+        "drivers/tty/ttynull.ko"
+    ],
+    "stubs": [
+        "generic-stubs.c",
+        "ttyprintk-env-stubs.c"
+    ],
+    "harness": "../harness2/examples/ttyprintk-goblint.harness",
+    "goblint_conf": ["common.json"]
+}
