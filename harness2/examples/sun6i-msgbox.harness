@@ -1,0 +1,44 @@
+#include "linux/kconfig.h"
+#include "linux/compiler_types.h"
+#include "asm/orc_header.h"
+#include "linux/build-salt.h"
+#include "linux/elfnote-lto.h"
+#include "linux/export-internal.h"
+#include "linux/module.h"
+#include "linux/bitops.h"
+#include "linux/clk.h"
+#include "linux/device.h"
+#include "linux/interrupt.h"
+#include "linux/io.h"
+#include "linux/mailbox_controller.h"
+#include "linux/of_irq.h"
+#include "linux/platform_device.h"
+#include "linux/reset.h"
+
+struct platform_device platform_dev;
+extern struct platform_driver sun6i_msgbox_driver;
+struct sun6i_msgbox {
+	struct mbox_controller controller;
+	struct clk *clk;
+	spinlock_t lock;
+	void __iomem *regs;
+};
+
+@include('char-dev-generic.lua')
+
+@char_dev_driver_load_action:exec([[
+    sun6i_msgbox_driver.probe(&platform_dev);
+]])
+@char_dev_driver_unloaded_action:exec([[
+    sun6i_msgbox_driver.remove(&platform_dev);
+]])
+
+@char_dev_client_acquire_connection_action:exec([[
+    ((struct sun6i_msgbox *) platform_dev.dev.driver_data)->controller.ops->startup(&((struct sun6i_msgbox *) platform_dev.dev.driver_data)->controller.chans[0]);
+]])
+@char_dev_client_use_connection_action:exec([[
+    ((struct sun6i_msgbox *) platform_dev.dev.driver_data)->controller.ops->send_data(&((struct sun6i_msgbox *) platform_dev.dev.driver_data)->controller.chans[0], &(uint32_t){__harness_rand()});
+]])
+@char_dev_client_disconnect_action:exec([[
+    ((struct sun6i_msgbox *) platform_dev.dev.driver_data)->controller.ops->shutdown(&((struct sun6i_msgbox *) platform_dev.dev.driver_data)->controller.chans[0]);
+]])
