@@ -1,0 +1,63 @@
+#include "linux/kconfig.h"
+#include "linux/compiler_types.h"
+#include "asm/orc_header.h"
+#include "linux/build-salt.h"
+#include "linux/elfnote-lto.h"
+#include "linux/export-internal.h"
+#include "linux/module.h"
+#include "linux/device.h"
+#include "linux/parport.h"
+#include "linux/ctype.h"
+#include "linux/poll.h"
+#include "uapi/linux/major.h"
+#include "uapi/linux/ppdev.h"
+
+extern const struct file_operations *registered_chrdev;
+
+@include('char-dev-generic.lua')
+
+@for _, char_dev_client in pairs(char_dev_clients) do
+    char_dev_client:setup([[
+        struct inode inode = {
+            .i_rdev = %client_id%
+        };
+        struct file file;
+        const char content[] = "client%client_id%";
+    ]])
+end
+
+@char_dev_driver_load_action:exec([[
+    init_module();
+]])
+@char_dev_driver_unloaded_action:exec([[
+    cleanup_module();
+]])
+
+@char_dev_client_acquire_connection_action:exec([[
+    inode.i_rdev = %client_id%;
+    file.f_inode = &inode;
+    registered_chrdev->open(&inode, &file);
+]])
+@char_dev_client_disconnect_action:exec([[
+    inode.i_rdev = %client_id%;
+    file.f_inode = &inode;
+    registered_chrdev->release(&inode, &file);
+]])
+@char_dev_client_use_connection_action:exec([[
+    loff_t pos;
+    inode.i_rdev = %client_id%;
+    file.f_inode = &inode;
+    if (__harness_rand()) {
+        registered_chrdev->write(&file, content, sizeof(content), &pos);
+    } else {
+        registered_chrdev->compat_ioctl(&file, __harness_rand(), __harness_rand());
+    }
+]])
+@char_dev_client_use2_connection_action:exec([[
+    loff_t pos;
+    inode.i_rdev = %client_id%;
+    file.f_inode = &inode;
+    poll_table table = {0};
+    registered_chrdev->poll(&file, &table);
+    registered_chrdev->read(&file, content, sizeof(content), &pos);
+]])
