@@ -1,0 +1,11 @@
+{
+    "kernel_inputs": [
+        "drivers/char/hw_random/intel-rng.o"
+    ],
+    "stubs": [
+        "generic-stubs.c",
+        "amd-rng-stubs-env.c"
+    ],
+    "harness": "../harness2/examples/amd-rng.harness",
+    "goblint_conf": ["common.json"]
+}

@@ -67,6 +67,12 @@ unsigned int ioread32(const void __iomem *) {
 	return __harness_rand();
 }
 
+void iounmap(volatile void __iomem *addr) {}
+
+void __iomem *ioremap(resource_size_t offset, unsigned long size) {
+	return __kmalloc(sizeof(char), GFP_KERNEL);
+}
+
 // pci_dev_put [include/linux/pci.h line 1188 column 6]
 void pci_dev_put(struct pci_dev *dev) {}
 
@@ -102,3 +108,7 @@ int pci_write_config_byte(const struct pci_dev *dev, int where, u8 val) {
 // usleep_range_state [include/linux/delay.h line 63 column 6]
 void usleep_range_state(unsigned long min, unsigned long max,
 			unsigned int state) {}
+
+int stop_machine(int (*fn)(void *), void *data, const struct cpumask *cpus) {
+	return 0;
+}
