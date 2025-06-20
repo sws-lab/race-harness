@@ -88,3 +88,11 @@ cargo build --release
 # Or some other module
 /driver.py --db kernel/linux-6.14.1.db --goblint ~/goblint/analyzer/goblint --harness-compiler harness2/target/release/harness2 examples/pcspkr.json
 ```
+
+### Kernel module execution hack
+This is an example of using special harness to actually run a kernel module
+```bash
+HARNESS_KERNEL_EXECUTABLE=yes ./harness2/target/release/harness2 harness2/examples/ttyprintk-executable.harness > ~/2.c
+clang-19 -I. -Wp,-MMD,./..module-common.o.d -I./arch/x86/include -I./arch/x86/include/generated -I./include -I./include -I./arch/x86/include/uapi -I./arch/x86/include/generated/uapi -I./include/uapi -I./include/generated/uapi -include ./include/linux/compiler-version.h -include ./include/linux/kconfig.h -include ./include/linux/compiler_types.h -D__KERNEL__  -std=gnu11 -Wno-sign-compare   -DCC_USING_NOP_MCOUNT -DCC_USING_FENTRY -fno-strict-overflow -fno-stack-check  -Wno-format-security -Wno-trigraphs  -Wno-address-of-packed-member -Wmissing-declarations -Wmissing-prototypes -Wno-gnu -Wno-format-overflow-non-kprintf -Wno-format-truncation-non-kprintf -Wno-unused-but-set-variable -Wno-unused-const-variable -Wno-format-overflow -Wno-override-init -Wno-pointer-to-enum-cast -Wno-tautological-constant-out-of-range-compare -Wno-unaligned-access -Wno-enum-compare-conditional -Wno-missing-field-initializers -Wno-type-limits -Wno-shift-negative-value -Wno-enum-enum-conversion -Wno-sign-compare -Wno-unused-parameter -Wno-pointer-sign -fno-optimize-sibling-calls -fcf-protection -DMODULE '-DKBUILD_BASENAME=".module_common"' '-DKBUILD_MODNAME=".module_common.o"' -D__KBUILD_MODNAME=kmod_.module_common.o -o ~/2 -O2 -ggdb ~/2.c drivers/char/ttyprintk.c /home/jprotopopov/goblint-linux-kernel/examples/ttyprintk-exec-stubs.c -fPIE -fsanitize=thread # Adjust paths as necessary
+~/2
+```

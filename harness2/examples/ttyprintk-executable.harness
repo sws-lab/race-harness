@@ -1,40 +1,40 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <pthread.h>
+#include "linux/compiler_types.h"
+#include "linux/kconfig.h"
+#include "asm/orc_header.h"
+#include "linux/build-salt.h"
+#include "linux/console.h"
+#include "linux/device.h"
+#include "linux/elfnote-lto.h"
+#include "linux/export-internal.h"
+#include "linux/module.h"
+#include "linux/serial.h"
+#include "linux/tty.h"
 
-struct S1 {
-    _Atomic unsigned int connections;
-    _Atomic unsigned int value;
-};
-                            
-static struct S1 *s1_ptr;
+extern struct tty_driver *registered_tty_driver;
 
 @executable(true)
 @include('char-dev-generic.lua')
 
-@char_dev_driver:setup([[
-    static struct S1 s1 = {0};
-]])
+@for _, char_dev_client in pairs(char_dev_clients) do
+    char_dev_client:setup([[
+        struct tty_struct tty;
+        struct file file;
+        const char content[] = "client%client_id%";
+    ]])
+end
 
 @char_dev_driver_load_action:exec([[
-    s1_ptr = &s1;
-    s1_ptr->connections = 0;
-    s1_ptr->value = 0;
-    printf("Driver loaded\n");
+    init_module();
 ]])
 @char_dev_driver_unloaded_action:exec([[
-    printf("Driver unloaded\n");
-    s1_ptr = NULL;
+    cleanup_module();
 ]])
 @char_dev_client_acquire_connection_action:exec([[
-    s1_ptr->connections++;
-    printf("Client %client_id% connected\n");
+    registered_tty_driver->ops->open(&tty, &file);
 ]])
 @char_dev_client_disconnect_action:exec([[
-    s1_ptr->connections--;
-    printf("Client %client_id% disconnected\n");
+    registered_tty_driver->ops->close(&tty, &file);
 ]])
 @char_dev_client_use_connection_action:exec([[
-    s1_ptr->value++;
-    printf("Client %client_id% active\n");
+    registered_tty_driver->ops->write(&tty, content, sizeof(content));
 ]])

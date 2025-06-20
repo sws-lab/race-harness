@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, io::Read, path::Path};
 
 use harness::{codegen::{codegen::ControlFlowCodegen, executable::ControlFlowExecutableCodegen, goblint::ControlFlowGoblintCodegen, output::WriteCodegenOutput}, control_flow::{builder::ControlFlowBuilder, mutex::ControlFlowMutexSet}, core::{error::HarnessError, mutex::mutex::ProcessSetMutualExclusion}};
 
-use crate::harness::{dsl::{dsl::DSLInterpreter, lua::interpreter::LuaDSLInterpreter}, harness::harness::Harness, relations::concretization::HarnessModelConcretization};
+use crate::harness::{codegen::kernel_executable::ControlFlowKernelExecutableCodegen, dsl::{dsl::DSLInterpreter, lua::interpreter::LuaDSLInterpreter}, harness::harness::Harness, relations::concretization::HarnessModelConcretization};
 
 pub mod harness;
 
@@ -43,8 +43,13 @@ fn main() {
     let mut stdout = std::io::stdout();
     let mut codegen_output = WriteCodegenOutput::new(&mut stdout);
     if symbolic_harness.get_template().is_executable() {
-        let codegen = ControlFlowExecutableCodegen::new();
-        codegen.format(&mut codegen_output, harness.get_concrete_model().get_context(), harness.get_concrete_model().get_processes(), harness.get_template(), control_flow_nodes.iter().map(| (process, node) | (*process, node)), mutex_set.get_mutexes()).unwrap();
+        if std::env::var("HARNESS_KERNEL_EXECUTABLE") == Ok("yes".into()) {
+            let codegen = ControlFlowKernelExecutableCodegen::new();
+            codegen.format(&mut codegen_output, harness.get_concrete_model().get_context(), harness.get_concrete_model().get_processes(), harness.get_template(), control_flow_nodes.iter().map(| (process, node) | (*process, node)), mutex_set.get_mutexes()).unwrap();
+        } else {
+            let codegen = ControlFlowExecutableCodegen::new();
+            codegen.format(&mut codegen_output, harness.get_concrete_model().get_context(), harness.get_concrete_model().get_processes(), harness.get_template(), control_flow_nodes.iter().map(| (process, node) | (*process, node)), mutex_set.get_mutexes()).unwrap();
+        }
     } else {
         let codegen = ControlFlowGoblintCodegen::new();
         codegen.format(&mut codegen_output, harness.get_concrete_model().get_context(), harness.get_concrete_model().get_processes(), harness.get_template(), control_flow_nodes.iter().map(| (process, node) | (*process, node)), mutex_set.get_mutexes()).unwrap();
