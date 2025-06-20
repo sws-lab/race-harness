@@ -1,1 +1,0 @@
-class HarnessError(BaseException): pass
