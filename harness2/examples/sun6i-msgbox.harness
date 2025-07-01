@@ -17,6 +17,7 @@
 
 struct platform_device platform_dev;
 extern struct platform_driver sun6i_msgbox_driver;
+extern const struct mbox_chan_ops sun6i_msgbox_chan_ops;
 struct sun6i_msgbox {
 	struct mbox_controller controller;
 	struct clk *clk;
@@ -34,11 +35,11 @@ struct sun6i_msgbox {
 ]])
 
 @char_dev_client_acquire_connection_action:exec([[
-    ((struct sun6i_msgbox *) platform_dev.dev.driver_data)->controller.ops->startup(&((struct sun6i_msgbox *) platform_dev.dev.driver_data)->controller.chans[0]);
+    sun6i_msgbox_chan_ops.startup(&((struct sun6i_msgbox *) platform_dev.dev.driver_data)->controller.chans[0]);
 ]])
 @char_dev_client_use_connection_action:exec([[
-    ((struct sun6i_msgbox *) platform_dev.dev.driver_data)->controller.ops->send_data(&((struct sun6i_msgbox *) platform_dev.dev.driver_data)->controller.chans[0], &(uint32_t){__harness_rand()});
+    sun6i_msgbox_chan_ops.send_data(&((struct sun6i_msgbox *) platform_dev.dev.driver_data)->controller.chans[0], &(uint32_t){__harness_rand()});
 ]])
 @char_dev_client_disconnect_action:exec([[
-    ((struct sun6i_msgbox *) platform_dev.dev.driver_data)->controller.ops->shutdown(&((struct sun6i_msgbox *) platform_dev.dev.driver_data)->controller.chans[0]);
+    sun6i_msgbox_chan_ops.shutdown(&((struct sun6i_msgbox *) platform_dev.dev.driver_data)->controller.chans[0]);
 ]])
