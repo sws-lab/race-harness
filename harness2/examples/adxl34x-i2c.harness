@@ -1,0 +1,33 @@
+#include "linux/kconfig.h"
+#include "linux/compiler_types.h"
+#include "asm/orc_header.h"
+#include "linux/build-salt.h"
+#include "linux/elfnote-lto.h"
+#include "linux/export-internal.h"
+#include "linux/module.h"
+#include "linux/input.h"
+#include "linux/i2c.h"
+#include "drivers/input/misc/adxl34x.h"
+
+@include('char-dev-generic.lua')
+
+extern struct i2c_driver adxl34x_driver;
+extern const struct adxl34x_bus_ops *registered_bops;
+static struct i2c_client client;
+
+@char_dev_driver_load_action:exec([[
+    client = (struct i2c_client){0};
+    adxl34x_driver.probe(&client);
+]])
+
+
+@char_dev_client_use_connection_action:exec([[
+    if (__harness_rand()) {
+        registered_bops->read(&client.dev, __harness_rand());
+    } else if (__harness_rand()) {
+        char buf[128];
+        registered_bops->read_block(&client.dev, __harness_rand(), __harness_rand() % (sizeof(buf) - 1) + 1, buf);
+    } else {
+        registered_bops->write(&client.dev, __harness_rand(), __harness_rand());
+    }
+]])
