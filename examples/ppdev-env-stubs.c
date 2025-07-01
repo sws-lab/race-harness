@@ -196,3 +196,7 @@ void parport_unregister_driver(struct parport_driver *) {}
 ssize_t parport_write (struct parport *, const void *buf, size_t len) {
 	return len;
 }
+
+int __SCT__cond_resched(void) {
+	return 0;
+}
