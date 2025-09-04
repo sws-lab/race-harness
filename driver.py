@@ -9,23 +9,28 @@ import dataclasses
 import argparse
 import subprocess
 import pathlib
-from typing import List, Any
+import uuid
+from typing import List, Any, Optional
 from compile_db.compilation_database import CompilationDatabase, KernelBuild, BuildTarget, BuildTargetType
 from goblint_driver.goblint_driver import resolve_build, GoblintDriverException, GoblintDriver
 
 @dataclasses.dataclass
 class VerificationTask:
-    root_dir: pathlib.Path
+    task_filepath: pathlib.Path
     kernel_inputs: List[str]
     stubs: List[str]
     harness: str
     goblint_conf: List[Any]
     goblint_extra_args: List[str]
 
+    @property
+    def root_dir(self) -> pathlib.Path:
+        return self.task_filepath.parent
+
     @staticmethod
-    def load(config, root_dir: pathlib.Path):
+    def load(config, task_filepath: pathlib.Path):
         return VerificationTask(
-            root_dir=root_dir,
+            task_filepath=task_filepath,
             kernel_inputs=config['kernel_inputs'],
             stubs=config['stubs'],
             harness=config['harness'],
@@ -34,8 +39,9 @@ class VerificationTask:
         )
 
 class VerificationTaskDriver:
-    def __init__(self, db: CompilationDatabase, goblint_path: str, harness_compiler_path: str, logger: logging.Logger):
+    def __init__(self, db: CompilationDatabase, goblint_path: str, harness_compiler_path: str, amalgamate: Optional[str], logger: logging.Logger):
         self._harness_compiler_path = harness_compiler_path
+        self._amalgamate = amalgamate
         self._logger = logger
         self._goblint_driver = GoblintDriver(db, goblint_path, logger)
 
@@ -74,7 +80,19 @@ class VerificationTaskDriver:
                         with open(conf_filename, 'w') as conf_out:
                             json.dump(conf_part, conf_out)
                         goblint_confs.append(conf_filename)
-                self._goblint_driver.run(build, goblint_confs, task.goblint_extra_args, [*task.kernel_inputs, *stubs, harness_file.name])
+                if self._amalgamate:
+                    conf_amalgam, task_amalgam = self._goblint_driver.run(build, goblint_confs, task.goblint_extra_args, [*task.kernel_inputs, *stubs, harness_file.name], amalgamate=True)
+                    if not os.path.isdir(self._amalgamate):
+                        os.mkdir(self._amalgamate)
+                    random_id = str(uuid.uuid4())
+                    conf_amalgam_filepath = os.path.join(self._amalgamate, f'{task.task_filepath.with_suffix("").name}-{random_id}.json')
+                    amalgam_filepath = os.path.join(self._amalgamate, f'{task.task_filepath.with_suffix("").name}-{random_id}.c')
+                    with open(conf_amalgam_filepath, 'w') as conf_amalgam_file:
+                        json.dump(conf_amalgam, conf_amalgam_file, indent=2)
+                    with open(amalgam_filepath, 'w') as amalgam_file:
+                        amalgam_file.write(task_amalgam)
+                else:
+                    self._goblint_driver.run(build, goblint_confs, task.goblint_extra_args, [*task.kernel_inputs, *stubs, harness_file.name])
 
 
 if __name__ == '__main__':
@@ -85,6 +103,7 @@ if __name__ == '__main__':
     parser.add_argument('--goblint', type=str, required=True, help='Goblint executable path')
     parser.add_argument('--harness-compiler', type=str, required=True, help='Harness compiler executable path')
     parser.add_argument('--quiet', action='store_true', help='Suppress all logging')
+    parser.add_argument('--amalgamate', type=str, required=False, help='Generate and save amalgamation of verification task and configuration instead of running verification')
     parser.add_argument('task', help='Verification task definition is JSON format')
 
     args = parser.parse_args(sys.argv[1:])
@@ -93,12 +112,12 @@ if __name__ == '__main__':
         logger.addHandler(logging.StreamHandler(sys.stderr))
 
     with open(args.task) as task_file:
-        task = VerificationTask.load(json.load(task_file), pathlib.Path(args.task).parent)
+        task = VerificationTask.load(json.load(task_file), pathlib.Path(args.task))
 
     with CompilationDatabase(args.db) as db:
         try:
             build = resolve_build(db, args.build_id)
-            driver = VerificationTaskDriver(db, args.goblint, args.harness_compiler, logger)
+            driver = VerificationTaskDriver(db, args.goblint, args.harness_compiler, args.amalgamate, logger)
             driver(build, task)
         except GoblintDriverException as ex:
             logger.error(str(ex))

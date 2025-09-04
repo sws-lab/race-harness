@@ -8,7 +8,7 @@ import shlex
 import tempfile
 import subprocess
 import json
-from typing import Optional, Iterable, List, Tuple
+from typing import Optional, Iterable, List, Tuple, Any
 from compile_db.compilation_database import CompilationDatabase, KernelBuild, BuildTarget, BuildTargetType
 
 class GoblintDriverException(BaseException): pass
@@ -49,7 +49,7 @@ class GoblintDriver:
     def __call__(self, *args, **kwargs):
         return self.run(*args, **kwargs)
 
-    def run(self, build: KernelBuild, conf_filepaths: List[str], goblint_extra_args: Optional[List[str]], inputs: Iterable[str]):
+    def run(self, build: KernelBuild, conf_filepaths: List[str], goblint_extra_args: Optional[List[str]], inputs: Iterable[str], *, amalgamate: bool = False):
         resolved_inputs = list(self._resolve_inputs(build, inputs))
         inputs = [
             str(input.absolute())
@@ -67,18 +67,74 @@ class GoblintDriver:
             goblint_conf.write(goblint_conf_content)
             goblint_conf.flush()
 
-            self._logger.info('Starting Goblint with configuration %s + %s on %s', goblint_conf_content, conf_filepaths, inputs)
-            extra_conf = list()
-            for conf_filepath in conf_filepaths:
-                extra_conf.append('--conf')
-                extra_conf.append(conf_filepath)
-            goblint = subprocess.Popen(
+            if amalgamate:
+                return self.amalgamate([goblint_conf.name, *conf_filepaths], inputs, goblint_extra_args or ())
+            else:
+                self._logger.info('Starting Goblint with configuration %s + %s on %s', goblint_conf_content, conf_filepaths, inputs)
+                extra_conf = list()
+                for conf_filepath in conf_filepaths:
+                    extra_conf.append('--conf')
+                    extra_conf.append(conf_filepath)
+                goblint = subprocess.Popen(
+                    executable=self._goblint_filepath,
+                    args=[self._goblint_filepath, '--conf', goblint_conf.name, *extra_conf, *(goblint_extra_args or ()), *inputs],
+                    stdin=subprocess.DEVNULL,
+                    shell=False
+                )
+                goblint.wait()
+
+    def _fixup_amalgamated_code(self, code: str) -> str:
+        # These are ad-hoc fixups for features in CIL output that Goblint stumbles upon later
+        code = code.replace('__attribute__((__inline__))', '')
+        CURRENT_STACK_POINTER = 'register unsigned long current_stack_pointer __asm__("rsp") = 0UL;'
+        if CURRENT_STACK_POINTER in code:
+            code = code.replace(CURRENT_STACK_POINTER, '')
+            code = f'{CURRENT_STACK_POINTER}\n\n{code}'
+        return code
+
+    def amalgamate(self, configuration_filepaths: Iterable[str], input_filepaths: Iterable[str], goblint_extra_args: Iterable[str]) -> Tuple[Any, str]:
+        cmdline = [
+            self._goblint_filepath
+        ]
+        for conf_filepath in configuration_filepaths:
+            cmdline.append('--conf')
+            cmdline.append(conf_filepath)
+        cmdline.extend(goblint_extra_args)
+        cmdline.extend(input_filepaths)
+
+        self._logger.info('Starting Goblint with command line: %s', cmdline)
+        cil_amalgam_proc = subprocess.Popen(
+            executable=self._goblint_filepath,
+            args=[*cmdline, '--enable', 'justcil'],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            shell=False
+        )
+        preprocessed_amalgam = subprocess.Popen(
+            executable='/usr/bin/clang-19',
+            args=['/usr/bin/clang-19', '-E', '-P', '-o', '-', '-'],
+            stdin=cil_amalgam_proc.stdout,
+            stdout=subprocess.PIPE,
+            shell=False
+        )
+        cil_amalgam_proc.stdout.close()
+        amalgam = b''
+        stdout, _ = preprocessed_amalgam.communicate()
+        amalgam += stdout
+        cil_amalgam_proc.poll()
+        preprocessed_amalgam.poll()
+        amalgam = self._fixup_amalgamated_code(amalgam.decode())
+
+        with tempfile.NamedTemporaryFile(suffix='.json') as final_conf:
+            subprocess.run(
                 executable=self._goblint_filepath,
-                args=[self._goblint_filepath, '--conf', goblint_conf.name, *extra_conf, *(goblint_extra_args or ()), *inputs],
+                args=[*cmdline, '--writeconf', final_conf.name],
                 stdin=subprocess.DEVNULL,
                 shell=False
             )
-            goblint.wait()
+            conf_amalgam = json.load(final_conf)
+            del conf_amalgam['files']
+        return conf_amalgam, amalgam
 
     def _resolve_inputs(self, build: KernelBuild, inputs: Iterable[str]) -> Iterable[Tuple[Optional[BuildTarget], pathlib.Path]]:
         for input in inputs:
