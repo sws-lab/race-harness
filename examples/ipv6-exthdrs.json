@@ -1,0 +1,11 @@
+{
+    "kernel_inputs": [
+        "net/ipv6/exthdrs.c"
+    ],
+    "stubs": [
+        "generic-stubs.c",
+        "ipv6_exthdrs_stubs.c"
+    ],
+    "harness": "../harness2/examples/ipv6-exthdrs.harness",
+    "goblint_conf": ["common.json"]
+}

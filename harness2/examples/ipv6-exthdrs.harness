@@ -1,0 +1,39 @@
+// https://github.com/torvalds/linux/commit/3a5f55500f3e93cf4d62351c753452279b088b4b
+#include "linux/kconfig.h"
+#include "linux/compiler_types.h"
+#include "asm/orc_header.h"
+#include "linux/build-salt.h"
+#include "linux/elfnote-lto.h"
+#include "linux/export-internal.h"
+#include "linux/module.h"
+#include "linux/errno.h"
+#include "linux/types.h"
+#include "linux/socket.h"
+#include "linux/net.h"
+#include "linux/netdevice.h"
+#include "linux/icmpv6.h"
+#include "net/ipv6.h"
+#include "net/protocol.h"
+#include "net/transp_v6.h"
+#include "net/rawv6.h"
+#include "net/ndisc.h"
+#include "net/ip6_route.h"
+#include "net/calipso.h"
+#include "net/xfrm.h"
+#include "linux/seg6.h"
+#include "net/seg6.h"
+#include "net/seg6_hmac.h"
+#include "net/rpl.h"
+#include "linux/ioam6.h"
+#include "linux/ioam6_genl.h"
+#include "net/ioam6.h"
+#include "net/dst_metadata.h"
+
+@S('dummy1')
+@S('dummy2')
+
+@E(dummy1, dummy2, nil, nil)
+@E(dummy2, dummy1, nil, nil)
+
+@P('dummypr1', dummy1)
+@P('dummypr2', dummy1)
