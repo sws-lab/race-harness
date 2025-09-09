@@ -1,0 +1,11 @@
+{
+    "kernel_inputs": [
+        "fs/smb/client/cached_dir.c"
+    ],
+    "stubs": [
+        "generic-stubs.c",
+        "smb_client_cached_dir_stubs.c"
+    ],
+    "harness": "../harness2/examples/smb_client_cached_dir.harness",
+    "goblint_conf": ["common.json"]
+}
