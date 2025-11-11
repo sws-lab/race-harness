@@ -1,0 +1,46 @@
+[preamble.global]
+embed_header = true
+code = '''
+#include <linux/kernel.h>
+#include <linux/module.h>
+#include <linux/i8253.h>
+#include <linux/input.h>
+#include <linux/platform_device.h>
+#include <linux/timex.h>
+#include <linux/io.h>
+
+extern struct platform_driver pcspkr_platform_driver;
+'''
+
+[preamble.local.pdriver]
+code = '''
+struct platform_device platform_dev;
+'''
+
+[payload.use_i8253]
+code = '''
+unsigned long flags;
+raw_spin_lock_irqsave(&i8253_lock, flags);
+outb(inb_p(0x61) & 0xFC, 0x61);
+raw_spin_unlock_irqrestore(&i8253_lock, flags);
+'''
+
+[payload.probe_i8253]
+code = '''
+pcspkr_platform_driver.probe(&platform_dev);
+'''
+
+[payload.send_event_i8253]
+code = '''
+((struct input_dev *) platform_dev.dev.driver_data)->event(((struct input_dev *) platform_dev.dev.driver_data), EV_SND, SND_BELL, 1000);
+'''
+
+[payload.suspend_i8253]
+code = '''
+// Nothing
+'''
+
+[payload.shutdown_i8253]
+code = '''
+pcspkr_platform_driver.shutdown(&platform_dev);
+'''

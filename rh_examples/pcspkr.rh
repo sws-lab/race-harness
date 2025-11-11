@@ -1,0 +1,18 @@
+channel dummy {}
+
+proc pclient in dummy out dummy {
+    loop do use_i8253
+}
+
+proc pdriver in dummy out dummy {
+    loop {
+        do probe_i8253
+        active: loop if nondet then do suspend_i8253
+            else if nondet then do send_event_i8253
+            else break active 
+        do shutdown_i8253
+    }
+}
+
+run clients[3] pclient
+run driver pdriver
