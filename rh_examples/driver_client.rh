@@ -1,0 +1,43 @@
+channel cltmsg {
+    req_conn
+    disconnect
+}
+
+channel drvmsg {
+    grant
+    loaded
+    unload
+}
+
+proc pclient in drvmsg out cltmsg {
+alive:
+    loop if recv loaded then {
+        send req_conn driver
+        if recv unload then continue alive else if recv grant then {
+            do acquire_conn
+            use: loop if nondet then do use_conn else break use
+            do release_conn
+            send disconnect driver
+        }
+    }
+}
+
+proc pdriver in cltmsg out drvmsg {
+    var active_clients: set clients
+alive:
+    loop {
+        do load
+        send loaded clients
+loaded:
+        loop if recv req_conn from client then {
+            set active_clients add client
+            send grant client
+        } else if recv disconnect from client then set active_clients del client
+          else if set active_clients empty then break loaded
+        send unload clients
+        do unload
+    }
+}
+
+run clients[3] pclient
+run driver pdriver

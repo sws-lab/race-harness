@@ -69,10 +69,8 @@ void __write_overflow(void) {}
 void __write_overflow_field(size_t avail, size_t wanted) {}
 
 // _printk [include/linux/printk.h line 159 column 5]
-static int X = 0;
 __printf(1, 2) __cold
 int _printk(const char *fmt, ...) {
-	X++;
 	return 0;
 }
 

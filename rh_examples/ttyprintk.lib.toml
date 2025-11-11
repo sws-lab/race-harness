@@ -1,0 +1,54 @@
+[preamble.global]
+embed_header = true
+code = '''
+#include "linux/compiler_types.h"
+#include "linux/kconfig.h"
+#include "asm/orc_header.h"
+#include "linux/build-salt.h"
+#include "linux/console.h"
+#include "linux/device.h"
+#include "linux/elfnote-lto.h"
+#include "linux/export-internal.h"
+#include "linux/module.h"
+#include "linux/serial.h"
+#include "linux/tty.h"
+
+struct state {
+    struct tty_struct tty;
+    struct file file;
+};
+
+extern struct tty_driver *registered_tty_driver;
+static const char content[] = "client";
+'''
+
+[preamble.local.pclient]
+code = '''
+struct tty_struct tty;
+struct file file;
+'''
+
+[payload.load]
+code = '''
+init_module();
+'''
+
+[payload.unload]
+code = '''
+cleanup_module();
+'''
+
+[payload.acquire_conn]
+code = '''
+registered_tty_driver->ops->open(&tty, &file);
+'''
+
+[payload.use_conn]
+code = '''
+registered_tty_driver->ops->write(&tty, content, sizeof(content));
+'''
+
+[payload.release_conn]
+code = '''
+registered_tty_driver->ops->close(&tty, &file);
+'''

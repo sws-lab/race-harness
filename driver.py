@@ -17,6 +17,7 @@ from goblint_driver.goblint_driver import resolve_build, GoblintDriverException,
 @dataclasses.dataclass
 class VerificationTask:
     task_filepath: pathlib.Path
+    harness_compiler_extraargs: List[str]
     kernel_inputs: List[str]
     stubs: List[str]
     harness: str
@@ -31,6 +32,7 @@ class VerificationTask:
     def load(config, task_filepath: pathlib.Path):
         return VerificationTask(
             task_filepath=task_filepath,
+            harness_compiler_extraargs=config.get('harness_extra', list()),
             kernel_inputs=config['kernel_inputs'],
             stubs=config['stubs'],
             harness=config['harness'],
@@ -51,9 +53,22 @@ class VerificationTaskDriver:
             harness_filepath = task.root_dir / harness_filepath
         with tempfile.NamedTemporaryFile(mode='wb', suffix='.c') as harness_file:
             self._logger.info(f'Start generating harness code for {task.harness}')
+            harness_compiler_extraargs = list()
+            for arg in task.harness_compiler_extraargs:
+                if arg.startswith('-'):
+                    harness_compiler_extraargs.append(arg)
+                elif path := pathlib.Path(arg):
+                    if path.is_absolute():
+                        harness_compiler_extraargs.append(str(path.resolve()))
+                    elif (rel_path := task.root_dir / path).exists():
+                        harness_compiler_extraargs.append(str(rel_path.resolve()))
+                    else:
+                        harness_compiler_extraargs.append(arg)
+                else:
+                    harness_compiler_extraargs.append(arg)
             subprocess.check_call(
                 executable=self._harness_compiler_path,
-                args=[self._harness_compiler_path, str(harness_filepath)],
+                args=[self._harness_compiler_path, str(harness_filepath), *harness_compiler_extraargs],
                 stdin=subprocess.DEVNULL,
                 stdout=harness_file.file,
                 shell=False
