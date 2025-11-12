@@ -1,0 +1,11 @@
+channel dummy {}
+
+proc pballoon in dummy out dummy {
+    wait: loop if nondet then break wait
+    do init_balloon
+    loop {
+        do watch_balloon
+    }
+}
+
+run balloon pballoon

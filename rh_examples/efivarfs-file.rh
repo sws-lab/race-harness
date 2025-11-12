@@ -1,0 +1,15 @@
+channel dummy {}
+
+proc pclient in dummy out dummy {
+    loop {
+        do open_file
+        active: loop if nondet then do read_file
+            else if nondet then do write_file
+            else {
+                do close_file
+                break active
+            }
+    }
+}
+
+run clients[3] pclient

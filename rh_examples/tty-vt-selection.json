@@ -1,0 +1,12 @@
+{
+    "kernel_inputs": [
+        "drivers/tty/vt/selection.o"
+    ],
+    "stubs": [
+        "../examples/generic-stubs.c",
+        "../examples/tty-vt-selection-stubs.c"
+    ],
+    "harness": "tty-vt-selection.rh",
+    "harness_extra": ["--payloads", "tty-vt-selection.lib.toml"],
+    "goblint_conf": ["../examples/common.json"]
+}

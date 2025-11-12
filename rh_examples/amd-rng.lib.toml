@@ -1,0 +1,45 @@
+[preamble.global]
+embed_header = true
+code = '''
+#include "linux/kconfig.h"
+#include "linux/compiler_types.h"
+#include "asm/orc_header.h"
+#include "linux/build-salt.h"
+#include "linux/elfnote-lto.h"
+#include "linux/export-internal.h"
+#include "linux/module.h"
+#include "linux/delay.h"
+#include "linux/hw_random.h"
+#include "linux/io.h"
+#include "linux/pci.h"
+
+extern struct hwrng *registered_rng;
+'''
+
+[preamble.local.pclient]
+code = '''
+char buf[128];
+'''
+
+[payload.load]
+code = '''
+init_module();
+registered_rng->init(registered_rng);
+'''
+
+[payload.unload]
+code = '''
+registered_rng->cleanup(registered_rng);
+cleanup_module();
+'''
+
+[payload.acquire_conn]
+code = ''
+
+[payload.use_conn]
+code = '''
+registered_rng->read(registered_rng, buf, sizeof(buf), __harness_rand() % 1);
+'''
+
+[payload.release_conn]
+code = ''

@@ -36,9 +36,7 @@ code = '''
 '''
 
 [payload.suspend_i8253]
-code = '''
-// Nothing
-'''
+code = ''
 
 [payload.shutdown_i8253]
 code = '''

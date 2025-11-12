@@ -1,0 +1,56 @@
+[preamble.global]
+embed_header = true
+code = '''
+#include "linux/kconfig.h"
+#include "linux/compiler_types.h"
+#include "asm/orc_header.h"
+#include "linux/build-salt.h"
+#include "linux/elfnote-lto.h"
+#include "linux/export-internal.h"
+#include "linux/module.h"
+#include "linux/nvram.h"
+#include "linux/miscdevice.h"
+#include "linux/mc146818rtc.h"
+#include "linux/proc_fs.h"
+#include "linux/io.h"
+#include "linux/pagemap.h"
+
+extern struct miscdevice *registered_miscdevice;
+'''
+
+[preamble.local.pclient]
+code = '''
+struct inode inode;
+struct file file;
+const char content[] = "client";
+'''
+
+[payload.load]
+code = '''
+init_module();
+'''
+
+[payload.unload]
+code = '''
+cleanup_module();
+'''
+
+[payload.acquire_conn]
+code = '''
+registered_miscdevice->fops->open(&inode, &file);
+'''
+
+[payload.use_conn]
+code = '''
+loff_t pos;
+if (__harness_rand()) {
+    registered_miscdevice->fops->write(&file, content, sizeof(content), &pos);
+} else {
+    registered_miscdevice->fops->read(&file, content, sizeof(content), &pos);
+}
+'''
+
+[payload.release_conn]
+code = '''
+registered_miscdevice->fops->release(&inode, &file);
+'''

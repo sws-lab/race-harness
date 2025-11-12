@@ -1,0 +1,46 @@
+[preamble.global]
+embed_header = true
+code = '''
+#include "linux/kconfig.h"
+#include "linux/compiler_types.h"
+#include "asm/orc_header.h"
+#include "linux/build-salt.h"
+#include "linux/elfnote-lto.h"
+#include "linux/export-internal.h"
+#include "linux/module.h"
+#include "linux/efi.h"
+#include "linux/delay.h"
+#include "fs/efivarfs/internal.h"
+
+extern const struct file_operations efivarfs_file_operations;
+'''
+
+[preamble.local.pclient]
+code = '''
+struct efivar_entry entry;
+struct inode inode = { .i_private = &entry };
+struct file file;
+char buf[128];
+'''
+
+[payload.open_file]
+code = '''
+efivarfs_file_operations.open(&inode, &file);
+'''
+
+[payload.close_file]
+code = '''
+efivarfs_file_operations.release(&inode, &file);
+'''
+
+[payload.read_file]
+code = '''
+loff_t pos;
+efivarfs_file_operations.read(&file, buf, sizeof(buf), &pos);
+'''
+
+[payload.write_file]
+code = '''
+loff_t pos;
+efivarfs_file_operations.write(&file, buf, sizeof(buf), &pos);
+'''

@@ -1,0 +1,55 @@
+[preamble.global]
+embed_header = true
+code = '''
+#include "linux/kconfig.h"
+#include "linux/compiler_types.h"
+#include "asm/orc_header.h"
+#include "linux/build-salt.h"
+#include "linux/elfnote-lto.h"
+#include "linux/export-internal.h"
+#include "linux/module.h"
+#include "linux/bitops.h"
+#include "linux/clk.h"
+#include "linux/device.h"
+#include "linux/interrupt.h"
+#include "linux/io.h"
+#include "linux/mailbox_controller.h"
+#include "linux/of_irq.h"
+#include "linux/platform_device.h"
+#include "linux/reset.h"
+
+struct platform_device platform_dev;
+extern struct platform_driver sun6i_msgbox_driver;
+extern const struct mbox_chan_ops sun6i_msgbox_chan_ops;
+struct sun6i_msgbox {
+	struct mbox_controller controller;
+	struct clk *clk;
+	spinlock_t lock;
+	void __iomem *regs;
+};
+'''
+
+[payload.load]
+code = '''
+sun6i_msgbox_driver.probe(&platform_dev);
+'''
+
+[payload.unload]
+code = '''
+sun6i_msgbox_driver.remove(&platform_dev);
+'''
+
+[payload.acquire_conn]
+code = '''
+sun6i_msgbox_chan_ops.startup(&((struct sun6i_msgbox *) platform_dev.dev.driver_data)->controller.chans[0]);
+'''
+
+[payload.use_conn]
+code = '''
+sun6i_msgbox_chan_ops.send_data(&((struct sun6i_msgbox *) platform_dev.dev.driver_data)->controller.chans[0], &(uint32_t){__harness_rand()});
+'''
+
+[payload.release_conn]
+code = '''
+sun6i_msgbox_chan_ops.shutdown(&((struct sun6i_msgbox *) platform_dev.dev.driver_data)->controller.chans[0]);
+'''

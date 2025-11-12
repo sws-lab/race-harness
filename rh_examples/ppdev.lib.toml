@@ -1,0 +1,68 @@
+[preamble.global]
+embed_header = true
+code = '''
+#include "linux/kconfig.h"
+#include "linux/compiler_types.h"
+#include "asm/orc_header.h"
+#include "linux/build-salt.h"
+#include "linux/elfnote-lto.h"
+#include "linux/export-internal.h"
+#include "linux/module.h"
+#include "linux/device.h"
+#include "linux/parport.h"
+#include "linux/ctype.h"
+#include "linux/poll.h"
+#include "uapi/linux/major.h"
+#include "uapi/linux/ppdev.h"
+
+extern const struct file_operations *registered_chrdev;
+'''
+
+[preamble.local.pclient]
+code = '''
+struct inode inode = {
+    .i_rdev = RH_PROCESS_ID
+};
+struct file file;
+const char content[] = "client";
+'''
+
+[payload.load]
+code = '''
+init_module();
+'''
+
+[payload.unload]
+code = '''
+cleanup_module();
+'''
+
+[payload.acquire_conn]
+code = '''
+inode.i_rdev = RH_PROCESS_ID;
+file.f_inode = &inode;
+registered_chrdev->open(&inode, &file);
+'''
+
+[payload.use_conn]
+code = '''
+loff_t pos;
+inode.i_rdev = RH_PROCESS_ID;
+file.f_inode = &inode;
+if (__harness_rand()) {
+    registered_chrdev->write(&file, content, sizeof(content), &pos);
+} else if (__harness_rand()) {
+    registered_chrdev->compat_ioctl(&file, __harness_rand(), __harness_rand());
+} else {
+    poll_table table = {0};
+    registered_chrdev->poll(&file, &table);
+    registered_chrdev->read(&file, content, sizeof(content), &pos);
+}
+'''
+
+[payload.release_conn]
+code = '''
+inode.i_rdev = RH_PROCESS_ID;
+file.f_inode = &inode;
+registered_chrdev->release(&inode, &file);
+'''

@@ -1,0 +1,12 @@
+{
+    "kernel_inputs": [
+        "fs/efivarfs/file.o"
+    ],
+    "stubs": [
+        "../examples/generic-stubs.c",
+        "../examples/efivarfs-file-stubs.c"
+    ],
+    "harness": "efivarfs-file.rh",
+    "harness_extra": ["--payloads", "efivarfs-file.lib.toml"],
+    "goblint_conf": ["../examples/common.json"]
+}

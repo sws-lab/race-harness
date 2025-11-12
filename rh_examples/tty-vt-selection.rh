@@ -1,0 +1,12 @@
+channel dummy {}
+
+proc pset in dummy out dummy {
+    loop do set_sel
+}
+
+proc ppaste in dummy out dummy {
+    loop do paste_sel
+}
+
+run paste ppaste
+run set pset

@@ -1,0 +1,12 @@
+{
+    "kernel_inputs": [
+        "drivers/char/random.o"
+    ],
+    "stubs": [
+        "../examples/generic-stubs.c",
+        "../examples/char-random-env-stubs.c"
+    ],
+    "harness": "driver_client.rh",
+    "harness_extra": ["--payloads", "char-random.lib.toml"],
+    "goblint_conf": ["../examples/common.json"]
+}

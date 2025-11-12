@@ -1,0 +1,12 @@
+{
+    "kernel_inputs": [
+        "drivers/xen/xen-balloon.o"
+    ],
+    "stubs": [
+        "../examples/generic-stubs.c",
+        "../examples/xen-balloon-stubs.c"
+    ],
+    "harness": "xen-balloon.rh",
+    "harness_extra": ["--payloads", "xen-balloon.lib.toml"],
+    "goblint_conf": ["../examples/common.json"]
+}

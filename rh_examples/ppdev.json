@@ -1,0 +1,12 @@
+{
+    "kernel_inputs": [
+        "drivers/char/ppdev.ko"
+    ],
+    "stubs": [
+        "../examples/generic-stubs.c",
+        "../examples/ppdev-env-stubs.c"
+    ],
+    "harness": "driver_client.rh",
+    "harness_extra": ["--payloads", "ppdev.lib.toml"],
+    "goblint_conf": ["../examples/common.json"]
+}
