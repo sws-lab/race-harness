@@ -1,0 +1,28 @@
+channel cltmsg {
+    req_conn
+    disconnect
+}
+
+channel drvmsg {
+    grant
+    loaded
+    unload
+}
+
+proc pclient in drvmsg out cltmsg {
+    loop {
+        do acquire_conn
+        use: loop if nondet then do use_conn else break use
+        do release_conn
+    }
+}
+
+proc pdriver in cltmsg out drvmsg {
+    loop {
+        do load
+        do unload
+    }
+}
+
+run clients[2] pclient
+run driver pdriver

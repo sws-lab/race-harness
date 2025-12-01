@@ -39,5 +39,5 @@ loaded:
     }
 }
 
-run clients[3] pclient
+run clients[2] pclient
 run driver pdriver

@@ -27,10 +27,18 @@ code = '''
 #include "vdso/vsyscall.h"
 #include "asm/archrandom.h"
 #include "generated/asm/irq_regs.h"
+
+static _Atomic int loaded = 0;
 '''
 
 [payload.load]
-code = ''
+code = '''
+if (!loaded) {
+    random_init_early("");
+    random_init();
+    loaded = 1;
+}
+'''
 
 [payload.unload]
 code = ''

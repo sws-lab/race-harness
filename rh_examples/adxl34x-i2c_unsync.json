@@ -1,0 +1,12 @@
+{
+    "kernel_inputs": [
+        "drivers/input/misc/adxl34x-i2c.ko"
+    ],
+    "stubs": [
+        "../examples/generic-stubs.c",
+        "../examples/adxl34x-i2c-env-stubs.c"
+    ],
+    "harness": "driver_client_unsync.rh",
+    "harness_extra": ["--payloads", "adxl34x-i2c.lib.toml"],
+    "goblint_conf": ["../examples/common.json"]
+}

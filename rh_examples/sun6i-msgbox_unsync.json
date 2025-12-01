@@ -1,0 +1,19 @@
+{
+    "kernel_inputs": [
+        "drivers/mailbox/sun6i-msgbox.ko"
+    ],
+    "stubs": [
+        "../examples/generic-stubs.c",
+        "../examples/sun6i-msgbox-stubs.c"
+    ],
+    "harness": "driver_client_unsync.rh",
+    "harness_extra": ["--payloads", "sun6i-msgbox.lib.toml"],
+    "goblint_conf": [
+        "../examples/common.json",
+        {
+            "exp": {
+            "extraspecials": ["writel", "readl"]
+            }
+        }
+    ]
+}

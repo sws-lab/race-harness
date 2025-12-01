@@ -1,0 +1,12 @@
+{
+    "kernel_inputs": [
+        "drivers/char/nvram.ko"
+    ],
+    "stubs": [
+        "../examples/generic-stubs.c",
+        "../examples/nvram-env-stubs.c"
+    ],
+    "harness": "driver_client_unsync.rh",
+    "harness_extra": ["--payloads", "nvram.lib.toml"],
+    "goblint_conf": ["../examples/common.json"]
+}
