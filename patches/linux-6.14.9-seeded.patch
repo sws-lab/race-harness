@@ -1,0 +1,132 @@
+diff -ru drivers/char/nvram.c drivers/char/nvram.c
+--- drivers/char/nvram.c	2025-05-29 12:14:09.000000000 +0300
++++ drivers/char/nvram.c	2025-09-08 11:06:26.959955331 +0300
+@@ -349,7 +349,7 @@
+ 
+ static int nvram_misc_open(struct inode *inode, struct file *file)
+ {
+-	spin_lock(&nvram_state_lock);
++	// spin_lock(&nvram_state_lock);
+ 
+ 	/* Prevent multiple readers/writers if desired. */
+ 	if ((nvram_open_cnt && (file->f_flags & O_EXCL)) ||
+@@ -373,14 +373,14 @@
+ 		nvram_open_mode |= NVRAM_WRITE;
+ 	nvram_open_cnt++;
+ 
+-	spin_unlock(&nvram_state_lock);
++	// spin_unlock(&nvram_state_lock);
+ 
+ 	return 0;
+ }
+ 
+ static int nvram_misc_release(struct inode *inode, struct file *file)
+ {
+-	spin_lock(&nvram_state_lock);
++	// spin_lock(&nvram_state_lock);
+ 
+ 	nvram_open_cnt--;
+ 
+@@ -390,7 +390,7 @@
+ 	if (file->f_mode & FMODE_WRITE)
+ 		nvram_open_mode &= ~NVRAM_WRITE;
+ 
+-	spin_unlock(&nvram_state_lock);
++	// spin_unlock(&nvram_state_lock);
+ 
+ 	return 0;
+ }
+diff -ru drivers/char/ttyprintk.c drivers/char/ttyprintk.c
+--- drivers/char/ttyprintk.c	2025-05-29 12:14:09.000000000 +0300
++++ drivers/char/ttyprintk.c	2025-09-08 11:06:26.931955332 +0300
+@@ -110,9 +110,9 @@
+ 	int ret;
+ 
+ 	/* exclusive use of tpk_printk within this tty */
+-	spin_lock_irqsave(&tpkp->spinlock, flags);
++	// spin_lock_irqsave(&tpkp->spinlock, flags);
+ 	ret = tpk_printk(buf, count);
+-	spin_unlock_irqrestore(&tpkp->spinlock, flags);
++	// spin_unlock_irqrestore(&tpkp->spinlock, flags);
+ 
+ 	return ret;
+ }
+@@ -144,9 +144,9 @@
+ 		container_of(tport, struct ttyprintk_port, port);
+ 	unsigned long flags;
+ 
+-	spin_lock_irqsave(&tpkp->spinlock, flags);
++	// spin_lock_irqsave(&tpkp->spinlock, flags);
+ 	tpk_flush();
+-	spin_unlock_irqrestore(&tpkp->spinlock, flags);
++	// spin_unlock_irqrestore(&tpkp->spinlock, flags);
+ }
+ 
+ static const struct tty_operations ttyprintk_ops = {
+diff -ru drivers/input/misc/pcspkr.c drivers/input/misc/pcspkr.c
+--- drivers/input/misc/pcspkr.c	2025-09-08 11:09:23.551954658 +0300
++++ drivers/input/misc/pcspkr.c	2025-09-08 11:06:49.431955246 +0300
+@@ -43,7 +43,7 @@
+ 	if (value > 20 && value < 32767)
+ 		count = PIT_TICK_RATE / value;
+ 
+-	raw_spin_lock_irqsave(&i8253_lock, flags);
++	// raw_spin_lock_irqsave(&i8253_lock, flags);
+ 
+ 	if (count) {
+ 		/* set command for counter 2, 2 byte write */
+@@ -58,7 +58,7 @@
+ 		outb(inb_p(0x61) & 0xFC, 0x61);
+ 	}
+ 
+-	raw_spin_unlock_irqrestore(&i8253_lock, flags);
++	// raw_spin_unlock_irqrestore(&i8253_lock, flags);
+ 
+ 	return 0;
+ }
+diff -ru drivers/mailbox/sun6i-msgbox.c drivers/mailbox/sun6i-msgbox.c
+--- drivers/mailbox/sun6i-msgbox.c	2025-09-08 11:09:23.551954658 +0300
++++ drivers/mailbox/sun6i-msgbox.c	2025-09-08 11:06:51.831955237 +0300
+@@ -125,10 +125,10 @@
+ 		writel(RX_IRQ(n), mbox->regs + LOCAL_IRQ_STAT_REG);
+ 
+ 		/* Enable the receive IRQ. */
+-		spin_lock(&mbox->lock);
++		// spin_lock(&mbox->lock);
+ 		writel(readl(mbox->regs + LOCAL_IRQ_EN_REG) | RX_IRQ(n),
+ 		       mbox->regs + LOCAL_IRQ_EN_REG);
+-		spin_unlock(&mbox->lock);
++		// spin_unlock(&mbox->lock);
+ 	}
+ 
+ 	mbox_dbg(mbox, "Channel %d startup complete\n", n);
+@@ -143,10 +143,10 @@
+ 
+ 	if (readl(mbox->regs + CTRL_REG(n)) & CTRL_RX(n)) {
+ 		/* Disable the receive IRQ. */
+-		spin_lock(&mbox->lock);
++		// spin_lock(&mbox->lock);
+ 		writel(readl(mbox->regs + LOCAL_IRQ_EN_REG) & ~RX_IRQ(n),
+ 		       mbox->regs + LOCAL_IRQ_EN_REG);
+-		spin_unlock(&mbox->lock);
++		// spin_unlock(&mbox->lock);
+ 
+ 		/* Attempt to flush the FIFO until the IRQ is cleared. */
+ 		do {
+diff -ru drivers/tty/vt/selection.c drivers/tty/vt/selection.c
+--- drivers/tty/vt/selection.c	2025-05-29 12:14:09.000000000 +0300
++++ drivers/tty/vt/selection.c	2025-09-08 11:07:38.719955058 +0300
+@@ -377,11 +377,11 @@
+ {
+ 	int ret;
+ 
+-	mutex_lock(&vc_sel.lock);
++	// mutex_lock(&vc_sel.lock);
+ 	console_lock();
+ 	ret = vc_selection(vc_cons[fg_console].d, v, tty);
+ 	console_unlock();
+-	mutex_unlock(&vc_sel.lock);
++	// mutex_unlock(&vc_sel.lock);
+ 
+ 	return ret;
+ }

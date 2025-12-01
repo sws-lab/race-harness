@@ -1,0 +1,70 @@
+diff -ru drivers/char/random.c drivers/char/random.c
+--- drivers/char/random.c	2025-05-29 12:14:09.000000000 +0300
++++ drivers/char/random.c	2025-09-08 10:38:40.959961687 +0300
+@@ -529,7 +529,7 @@
+ 		return ret;							\
+ 	}									\
+ 										\
+-	local_lock_irqsave(&batched_entropy_ ##type.lock, flags);		\
++	_raw_spin_lock(&batched_entropy_ ##type.lock);		\
+ 	batch = raw_cpu_ptr(&batched_entropy_##type);				\
+ 										\
+ 	next_gen = READ_ONCE(base_crng.generation);				\
+@@ -543,7 +543,7 @@
+ 	ret = batch->entropy[batch->position];					\
+ 	batch->entropy[batch->position] = 0;					\
+ 	++batch->position;							\
+-	local_unlock_irqrestore(&batched_entropy_ ##type.lock, flags);		\
++	_raw_spin_unlock_irqrestore(&batched_entropy_ ##type.lock);		\
+ 	return ret;								\
+ }										\
+ EXPORT_SYMBOL(get_random_ ##type);
+@@ -828,8 +828,8 @@
+ {
+ 	return kstrtobool(arg, &trust_bootloader);
+ }
+-early_param("random.trust_cpu", parse_trust_cpu);
+-early_param("random.trust_bootloader", parse_trust_bootloader);
++// early_param("random.trust_cpu", parse_trust_cpu);
++// early_param("random.trust_bootloader", parse_trust_bootloader);
+ 
+ static int random_pm_notification(struct notifier_block *nb, unsigned long action, void *data)
+ {
+diff -ru drivers/input/misc/pcspkr.c drivers/input/misc/pcspkr.c
+--- drivers/input/misc/pcspkr.c	2025-05-29 12:14:09.000000000 +0300
++++ drivers/input/misc/pcspkr.c	2025-09-08 10:39:08.483961582 +0300
+@@ -117,11 +117,11 @@
+ 	pcspkr_event(NULL, EV_SND, SND_BELL, 0);
+ }
+ 
+-static const struct dev_pm_ops pcspkr_pm_ops = {
++const struct dev_pm_ops pcspkr_pm_ops = {
+ 	.suspend = pcspkr_suspend,
+ };
+ 
+-static struct platform_driver pcspkr_platform_driver = {
++struct platform_driver pcspkr_platform_driver = {
+ 	.driver		= {
+ 		.name	= "pcspkr",
+ 		.pm	= &pcspkr_pm_ops,
+diff -ru drivers/mailbox/sun6i-msgbox.c drivers/mailbox/sun6i-msgbox.c
+--- drivers/mailbox/sun6i-msgbox.c	2025-05-29 12:14:09.000000000 +0300
++++ drivers/mailbox/sun6i-msgbox.c	2025-09-08 10:39:08.991961580 +0300
+@@ -184,7 +184,7 @@
+ 	return readl(mbox->regs + MSG_STAT_REG(n)) & MSG_STAT_MASK;
+ }
+ 
+-static const struct mbox_chan_ops sun6i_msgbox_chan_ops = {
++const struct mbox_chan_ops sun6i_msgbox_chan_ops = {
+ 	.send_data    = sun6i_msgbox_send_data,
+ 	.startup      = sun6i_msgbox_startup,
+ 	.shutdown     = sun6i_msgbox_shutdown,
+@@ -302,7 +302,7 @@
+ };
+ MODULE_DEVICE_TABLE(of, sun6i_msgbox_of_match);
+ 
+-static struct platform_driver sun6i_msgbox_driver = {
++struct platform_driver sun6i_msgbox_driver = {
+ 	.driver = {
+ 		.name = "sun6i-msgbox",
+ 		.of_match_table = sun6i_msgbox_of_match,
