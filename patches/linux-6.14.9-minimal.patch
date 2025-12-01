@@ -68,3 +68,16 @@ diff -ru drivers/mailbox/sun6i-msgbox.c drivers/mailbox/sun6i-msgbox.c
  	.driver = {
  		.name = "sun6i-msgbox",
  		.of_match_table = sun6i_msgbox_of_match,
+--- drivers/input/misc/adxl34x-i2c.c       2025-05-29 12:14:09.000000000 +0300
++++ drivers/input/misc/adxl34x-i2c.c    2025-12-01 14:20:13.793514056 +0200
+@@ -122,7 +122,7 @@
+ 
+ MODULE_DEVICE_TABLE(of, adxl34x_of_id);
+ 
+-static struct i2c_driver adxl34x_driver = {
++struct i2c_driver adxl34x_driver = {
+        .driver = {
+                .name = "adxl34x",
+                .dev_groups = adxl34x_groups,
+diff -ru linux-6.14.9/drivers/input/misc/pcspkr.c ../linux-6.14.9/drivers/input/misc/pcspkr.c
+--- linux-6
