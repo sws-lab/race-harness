@@ -42,6 +42,12 @@ Unpack LTSmin:
 tar xvf ltsmin-v3.0.2-linux.tgz
 ```
 
+Set up the environment:
+```bash
+export LTSMIN_DIR=$PWD/v3.0.2
+export RACE_HARNESS_DIR=$PWD/race-harness-generator
+```
+
 Build race harness generator:
 ```bash
 cd race-harness-generator
@@ -61,9 +67,12 @@ popd
 make
 ```
 
+Build Linux kernel compilation database:
+```bash
+./race-harness/compile_db/extract_compilation_database.py --build-dir linux-6.14.9 --db linux-6.14.9.db
+```
+
 Run the evaluation:
 ```bash
-export LTSMIN_DIR=$PWD/v3.0.2
-export RACE_HARNESS_DIR=$PWD/race-harness-generator
 ./eval.sh results
 ```
