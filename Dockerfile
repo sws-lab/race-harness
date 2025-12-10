@@ -53,7 +53,7 @@ ENV JOBS=${JOBS} \
     LTSMIN_VERSION=3.0.2
 
 # Fetch required repositories and tarballs.
-RUN "${WORKDIR}/race-harness/fetch_artifacts.sh" "${WORKDIR}"
+RUN "${WORKDIR}/race-harness#/fetch_artifacts.sh" "${WORKDIR}"
 
 # Unpack Linux kernel and LTSmin.
 RUN cd "${WORKDIR}" \
@@ -83,7 +83,7 @@ RUN cd "${WORKDIR}/race-harness-goblint" \
     && eval "$(opam env --switch=${WORKDIR}/race-harness-goblint --set-switch)" \
     && make
 
-Build Linux kernel with Clang 18.
+# Build Linux kernel with Clang 18.
 RUN cd "${WORKDIR}/linux-${KERNEL_VERSION}" \
     && make allmodconfig LLVM=-18 \
     && make LLVM=-18 -j"${JOBS}"
