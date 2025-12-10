@@ -14,10 +14,10 @@ RUN --mount=type=cache,target=/var/cache/apt \
     cmake ninja-build pkg-config \
     python3 python3-venv python3-pip python3-dev \
     git curl wget ca-certificates jq file rsync unzip xz-utils sudo \
-    flex bison libssl-dev libelf-dev dwarves bc kmod cpio libncurses-dev \
+    gawk flex bison libssl-dev libelf-dev dwarves bc kmod cpio libncurses-dev \
     libcap-dev libiberty-dev zlib1g-dev libpopt-dev \
     libgmp-dev libmpfr-dev autoconf gcc-multilib libc6-dev-i386 lib32gcc-13-dev chrpath \
-    opam m4 bubblewrap \
+    opam m4 bubblewrap ruby \
     && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 180 \
     && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 180 \
     && update-alternatives --install /usr/bin/llvm-ar llvm-ar /usr/bin/llvm-ar-18 180 \
@@ -53,7 +53,7 @@ ENV JOBS=${JOBS} \
     LTSMIN_VERSION=3.0.2
 
 # Fetch required repositories and tarballs.
-RUN "${WORKDIR}/race-harness#/fetch_artifacts.sh" "${WORKDIR}"
+RUN "${WORKDIR}/race-harness/fetch_artifacts.sh" "${WORKDIR}"
 
 # Unpack Linux kernel and LTSmin.
 RUN cd "${WORKDIR}" \
@@ -68,9 +68,6 @@ ENV LTSMIN_DIR=${WORKDIR}/v${LTSMIN_VERSION} \
 RUN cd "${WORKDIR}/race-harness-generator" \
     && uv sync --frozen \
     && make -j"${JOBS}"
-
-# Initialize opam for non-root builds.
-RUN opam init --disable-sandboxing --bare
 
 # Build Goblint and pin CIL.
 RUN cd "${WORKDIR}/race-harness-goblint" \
