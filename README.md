@@ -51,8 +51,8 @@ export RACE_HARNESS_DIR=$PWD/race-harness-generator
 Build race harness generator:
 ```bash
 cd race-harness-generator
+uv sync --frozen # Initialize .venv and install pinned deps
 make -j$(nproc)
-uv run driver.py # To initialize .venv
 ```
 
 Build Goblint:
@@ -76,3 +76,10 @@ Run the evaluation:
 ```bash
 ./eval.sh results
 ```
+
+## Dockerized build
+```bash
+docker build -t race-harness-eval --build-arg JOBS=8 .
+docker run --rm -it race-harness-eval ./eval.sh /opt/race/results
+```
+The image builds everything (kernel, generator, Goblint, LTSmin) during `docker build`, so the container only needs `./eval.sh` to run experiments. Adjust `JOBS` to tune parallelism.
